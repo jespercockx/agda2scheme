@@ -1,0 +1,11 @@
+dist
+dist-newstyle
+*.agdai
+MAlonzo
+*.prof
+*.treeless
+*.hi
+*.o
+*.agda#
+*~
+.#*.agda
