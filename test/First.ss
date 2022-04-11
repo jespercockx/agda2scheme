@@ -39,37 +39,19 @@
 
 (define 
   (plus)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (record-case 
-        (force a)
-        ((zero) () (force b))
-        ((suc) (c) ((suc) (delay (((plus) (delay (force c))) (delay (force b))))))))))
+  (lambda (a) (lambda (b) (record-case (force a) ((zero) () (force b))
+((suc) (c) ((suc) (delay (((plus) c) b))))))))
 
 (define 
   (twice)
-  (lambda 
-    (a)
-    (record-case 
-      (force a)
-      ((zero) () (force a))
-      ((suc) (b) ((suc) (delay ((suc) (delay ((twice) (delay (force b)))))))))))
-
-(define 
-  (pow2)
-  (lambda 
-    (a)
-    (record-case 
-      (force a)
-      ((zero) () ((suc) (delay (force a))))
-      ((suc) (b) ((twice) (delay ((pow2) (delay (force b)))))))))
-
-(define 
-  (consume)
   (lambda (a) (record-case (force a) ((zero) () (force a))
-((suc) (b) ((consume) (delay (force b)))))))
+((suc) (b) ((suc) (delay ((suc) (delay ((twice) b)))))))))
+
+(define (pow2) (lambda (a) (record-case (force a) ((zero) () ((suc) a))
+((suc) (b) ((twice) (delay ((pow2) b)))))))
+
+(define (consume) (lambda (a) (record-case (force a) ((zero) () (force a))
+((suc) (b) ((consume) b)))))
 
 (define (test2) ((consume) (delay ((pow2) (delay ((twice) (delay ((twice) (delay ((twice) (delay (three))))))))))))
 
@@ -100,10 +82,8 @@ c)))))
               ((nil) () (force e))
               ((con) 
                 (f g h)
-                ((((con) (delay (force f))) (delay ((force d) (delay (force g))))) 
-                  (delay 
-                    ((((((map) (delay (list))) (delay (list))) (delay (list))) (delay (force d))) 
-                      (delay (force h)))))))))))))
+                ((((con) f) (delay ((force d) g))) 
+                  (delay ((((((map) (delay (list))) (delay (list))) (delay (list))) d) h)))))))))))
 
 (define 
   (test3)

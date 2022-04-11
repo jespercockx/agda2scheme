@@ -104,11 +104,17 @@ schCase x cases maybeFallback = RSList $
 schUnit :: SchForm
 schUnit = RSList [RSAtom "list"]
 
-schDelay :: SchForm -> SchForm
-schDelay x = RSList [RSAtom "delay", x]
+schDelay :: EvaluationStrategy -> SchForm -> SchForm
+schDelay EagerEvaluation x = x
+schDelay LazyEvaluation  x
+  | RSList [RSAtom "force", y] <- x = y
+  | otherwise                       = RSList [RSAtom "delay", x]
 
-schForce :: SchForm -> SchForm
-schForce x = RSList [RSAtom "force", x]
+schForce :: EvaluationStrategy -> SchForm -> SchForm
+schForce EagerEvaluation x = x
+schForce LazyEvaluation  x
+  | RSList [RSAtom "delay", y] <- x = y
+  | otherwise                       = RSList [RSAtom "force", x]
 
 schPreamble :: SchForm
 schPreamble = RSList
@@ -116,12 +122,21 @@ schPreamble = RSList
   , RSList [ RSAtom "only" , RSList [RSAtom "chezscheme"] , RSAtom "record-case" ]
   ]
 
+deriving instance Generic EvaluationStrategy
+deriving instance NFData  EvaluationStrategy
+
+data SchOptions = SchOptions
+  { schEvaluation :: EvaluationStrategy
+  }
+  deriving (Generic, NFData)
+
 data ToSchemeEnv = ToSchemeEnv
-  { toSchemeVars :: [SchAtom]
+  { toSchemeOptions :: SchOptions
+  , toSchemeVars    :: [SchAtom]
   }
 
-initToSchemeEnv :: ToSchemeEnv
-initToSchemeEnv = ToSchemeEnv []
+initToSchemeEnv :: SchOptions -> ToSchemeEnv
+initToSchemeEnv opts = ToSchemeEnv opts []
 
 addVarBinding :: SchAtom -> ToSchemeEnv -> ToSchemeEnv
 addVarBinding x env = env { toSchemeVars = x : toSchemeVars env }
@@ -149,6 +164,9 @@ freshSchAtom = do
       modify $ \st -> st { toSchemeFresh = names' }
       return x
 
+getEvaluationStrategy :: ToSchemeM EvaluationStrategy
+getEvaluationStrategy = reader $ schEvaluation . toSchemeOptions
+
 getVarName :: Int -> ToSchemeM SchAtom
 getVarName i = reader $ (!! i) . toSchemeVars
 
@@ -175,7 +193,8 @@ instance ToScheme Definition (Maybe SchForm) where
       Axiom{} -> return $ Just $ schAxiom f
       GeneralizableVar{} -> return Nothing
       Function{} -> do
-        maybeCompiled <- liftTCM $ toTreeless LazyEvaluation f
+        strat <- getEvaluationStrategy
+        maybeCompiled <- liftTCM $ toTreeless strat f
         case maybeCompiled of
           Just body -> Just <$> schDefine f <$> toScheme body
           Nothing   -> return Nothing
@@ -196,12 +215,14 @@ instance ToScheme TTerm SchForm where
   toScheme v = case v of
     TVar i -> do
       name <- getVarName i
-      return $ schForce $ RSAtom name
+      strat <- getEvaluationStrategy
+      return $ schForce strat $ RSAtom name
     TPrim p -> toScheme p
     TDef d -> return $ RSList [RSAtom (schName d)]
     TApp f args -> do
       f' <- toScheme f
-      args' <- map schDelay <$> traverse toScheme args
+      strat <- getEvaluationStrategy
+      args' <- map (schDelay strat) <$> traverse toScheme args
       return $ schApps f' args'
     TLam v -> withFreshVar $ \x -> do
       body <- toScheme v
@@ -214,7 +235,8 @@ instance ToScheme TTerm SchForm where
         body <- toScheme v
         return $ schLet [(x,expr)] body
     TCase i info v bs -> do
-      x <- schForce . RSAtom <$> getVarName i
+      strat <- getEvaluationStrategy
+      x <- schForce strat . RSAtom <$> getVarName i
       cases <- traverse toScheme bs
       fallback <- if isUnreachable v
                   then return Nothing

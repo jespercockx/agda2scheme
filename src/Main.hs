@@ -9,6 +9,10 @@ import Agda.Main ( runAgda )
 
 import Agda.Compiler.ToScheme
 
+import Agda.Interaction.Options ( OptDescr(..) , ArgDescr(..) )
+
+import Agda.Syntax.Treeless ( EvaluationStrategy(..) )
+
 import Agda.TypeChecking.Pretty
 
 import Agda.Utils.Either
@@ -40,37 +44,49 @@ main = runAgda [backend]
 backend :: Backend
 backend = Backend backend'
 
-data SchOptions = SchOptions
-  deriving (Generic, NFData)
-
 backend' :: Backend' SchOptions SchOptions () () (Maybe SchForm)
 backend' = Backend'
   { backendName           = "agda2scheme"
-  , options               = SchOptions
-  , commandLineFlags      = []
+  , options               = SchOptions EagerEvaluation
+  , commandLineFlags      = schFlags
   , isEnabled             = \ _ -> True
   , preCompile            = schPreCompile
   , postCompile           = \ _ _ _ -> return ()
   , preModule             = \ _ _ _ _ -> return $ Recompile ()
-  , compileDef            = \ _ _ -> schCompileDef
+  , compileDef            = schCompileDef
   , postModule            = \ _ _ -> schPostModule
   , backendVersion        = Nothing
   , scopeCheckingSuffices = False
   , mayEraseType          = \ _ -> return True
   }
 
+schFlags :: [OptDescr (Flag SchOptions)]
+schFlags =
+  [ Option [] ["lazy-evaluation"] (NoArg $ evaluationFlag LazyEvaluation)
+              "Insert delay and force operations to enable lazy evaluation"
+  , Option [] ["strict-evaluation"] (NoArg $ evaluationFlag EagerEvaluation)
+              "Do not insert delay and force operations (default)"
+  ]
+
 schPreCompile :: SchOptions -> TCM SchOptions
 schPreCompile opts = return opts
 
-schCompileDef :: IsMain -> Definition -> TCM (Maybe SchForm)
-schCompileDef isMain def =
+schCompileDef :: SchOptions -> () -> IsMain -> Definition -> TCM (Maybe SchForm)
+schCompileDef opts _ isMain def =
   toScheme def
   & (`evalStateT` initToSchemeState)
-  & (`runReaderT` initToSchemeEnv)
+  & (`runReaderT` initToSchemeEnv opts)
 
 schPostModule :: IsMain -> ModuleName -> [Maybe SchForm] -> TCM ()
 schPostModule isMain modName defs = do
-  let defToText = encodeOne (basicPrint id) . fromRich
+  let defToText = encodeOne printer . fromRich
       modText   = T.intercalate "\n\n" $ map defToText $ schPreamble : catMaybes defs
       fileName  = prettyShow (last $ mnameToList modName) ++ ".ss"
   liftIO $ T.writeFile fileName modText
+
+  where
+    printer :: SExprPrinter Text (SExpr Text)
+    printer = basicPrint id
+
+evaluationFlag :: EvaluationStrategy -> Flag SchOptions
+evaluationFlag s o = return $ o { schEvaluation = s }
