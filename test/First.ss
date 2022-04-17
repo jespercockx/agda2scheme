@@ -38,9 +38,9 @@
 ((suc) (b) (force b)))))
 
 (define 
-  (plus)
+  (_+_)
   (lambda (a) (lambda (b) (record-case (force a) ((zero) () (force b))
-((suc) (c) ((suc) (delay (((plus) c) b))))))))
+((suc) (c) ((suc) (delay (((_+_) c) b))))))))
 
 (define 
   (twice)
@@ -102,3 +102,12 @@ c)))))
 (define (z123\x27;\x23;\x7C;H\x5C;x65llo) (zero))
 
 (define (test4) (z123\x27;\x23;\x7C;H\x5C;x65llo))
+
+(define (fie) (lambda (a) ((suc) a)))
+
+(define (foe) (lambda (a) ((suc) (delay ((fie) a)))))
+
+(define 
+  (fun)
+  (((_+_) (delay ((fie) (delay ((suc) (delay ((suc) (delay (zero))))))))) 
+    (delay ((foe) (delay ((suc) (delay ((suc) (delay (zero))))))))))

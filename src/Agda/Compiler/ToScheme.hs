@@ -297,6 +297,7 @@ instance ToScheme Definition (Maybe SchForm) where
         f' <- toScheme f
         return $ Just $ schAxiom f'
       GeneralizableVar{} -> return Nothing
+      d@Function{} | d ^. funInline -> return Nothing
       Function{} -> do
         f' <- toScheme f
         strat <- getEvaluationStrategy

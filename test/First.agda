@@ -33,9 +33,9 @@ pred zero = zero
 pred (suc n) = n
 
 
-plus : Nat → Nat → Nat
-plus zero n = n
-plus (suc m) n = suc (plus m n)
+_+_ : Nat → Nat → Nat
+zero + n = n
+(suc m) + n = suc (m + n)
 
 twice : Nat → Nat
 twice zero = zero
@@ -72,3 +72,15 @@ test3 = head (tail (map suc (con zero (con (suc zero) (con (suc (suc zero)) nil)
 123'#|H\x65llo = zero
 
 test4 = 123'#|H\x65llo
+
+module M (n : Nat) where
+  fie : Nat
+  fie = suc n
+
+  foe : Nat
+  foe = suc fie
+
+open M (suc (suc zero))
+
+fun : Nat
+fun = fie + foe
