@@ -67,3 +67,8 @@ map f nil = nil
 map f (con x xs) = con (f x) (map f xs)
 
 test3 = head (tail (map suc (con zero (con (suc zero) (con (suc (suc zero)) nil)))))
+
+-- Testing that names are properly sanitized
+123'#|H\x65llo = zero
+
+test4 = 123'#|H\x65llo

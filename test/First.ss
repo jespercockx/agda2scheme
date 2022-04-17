@@ -98,3 +98,7 @@ c)))))
                   ((((con) (delay ((suc) (delay (zero))))) (delay ((suc) (delay (zero))))) 
                     (delay 
                       ((((con) (delay (zero))) (delay ((suc) (delay ((suc) (delay (zero))))))) (delay (nil))))))))))))))
+
+(define (z123\x27;\x23;\x7C;H\x5C;x65llo) (zero))
+
+(define (test4) (z123\x27;\x23;\x7C;H\x5C;x65llo))
