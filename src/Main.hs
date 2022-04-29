@@ -54,7 +54,7 @@ backend' = Backend'
   , postCompile           = \ _ _ _ -> return ()
   , preModule             = \ _ _ _ _ -> return $ Recompile ()
   , compileDef            = schCompileDef
-  , postModule            = \ _ _ -> schPostModule
+  , postModule            = schPostModule
   , backendVersion        = Nothing
   , scopeCheckingSuffices = False
   , mayEraseType          = \ _ -> return True
@@ -72,15 +72,13 @@ schPreCompile :: SchOptions -> TCM SchOptions
 schPreCompile opts = return opts
 
 schCompileDef :: SchOptions -> () -> IsMain -> Definition -> TCM (Maybe SchForm)
-schCompileDef opts _ isMain def =
-  toScheme def
-  & (`evalStateT` initToSchemeState)
-  & (`runReaderT` initToSchemeEnv opts)
+schCompileDef opts _ isMain def = runToSchemeM opts $ toScheme def
 
-schPostModule :: IsMain -> ModuleName -> [Maybe SchForm] -> TCM ()
-schPostModule isMain modName defs = do
+schPostModule :: SchOptions -> () -> IsMain -> ModuleName -> [Maybe SchForm] -> TCM ()
+schPostModule opts _ isMain modName defs = do
+  preamble <- runToSchemeM opts schPreamble
   let defToText = encodeOne printer . fromRich
-      modText   = T.intercalate "\n\n" $ map defToText $ schPreamble : catMaybes defs
+      modText   = T.intercalate "\n\n" $ map defToText $ preamble ++ catMaybes defs
       fileName  = prettyShow (last $ mnameToList modName) ++ ".ss"
   liftIO $ T.writeFile fileName modText
 

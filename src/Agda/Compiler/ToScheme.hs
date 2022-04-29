@@ -4,10 +4,11 @@ import Prelude hiding ( null , empty )
 
 import Agda.Compiler.Common
 import Agda.Compiler.ToTreeless
+import Agda.Compiler.Treeless.EliminateLiteralPatterns
 
 import Agda.Syntax.Abstract.Name
 import Agda.Syntax.Common
-import Agda.Syntax.Internal ( conName )
+import Agda.Syntax.Internal as I
 import Agda.Syntax.Literal
 import Agda.Syntax.Treeless
 
@@ -105,23 +106,41 @@ schCase x cases maybeFallback = RSList $
 schUnit :: SchForm
 schUnit = RSList [RSAtom "list"]
 
-schDelay :: EvaluationStrategy -> SchForm -> SchForm
-schDelay EagerEvaluation x = x
-schDelay LazyEvaluation  x
+schDelay :: SchForm -> SchForm
+schDelay x
   | RSList [RSAtom "force", y] <- x = y
   | otherwise                       = RSList [RSAtom "delay", x]
 
-schForce :: EvaluationStrategy -> SchForm -> SchForm
-schForce EagerEvaluation x = x
-schForce LazyEvaluation  x
+schForce :: SchForm -> SchForm
+schForce x
   | RSList [RSAtom "delay", y] <- x = y
   | otherwise                       = RSList [RSAtom "force", x]
 
-schPreamble :: SchForm
-schPreamble = RSList
-  [ RSAtom "import"
-  , RSList [ RSAtom "only" , RSList [RSAtom "chezscheme"] , RSAtom "record-case" ]
-  ]
+schAdd, schSub, schMul, schQuot, schRem, schIf, schEq :: SchForm
+schAdd  = RSList [RSAtom "add"]
+schSub  = RSList [RSAtom "sub"]
+schMul  = RSList [RSAtom "mul"]
+schQuot = RSList [RSAtom "quot"]
+schRem  = RSList [RSAtom "rem"]
+schIf   = RSList [RSAtom "iff"]
+schEq   = RSList [RSAtom "eq"]
+
+schPreamble :: ToSchemeM [SchForm]
+schPreamble = do
+  force <- makeForce
+  return
+    [ RSList
+      [ RSAtom "import"
+      , RSList [ RSAtom "only" , RSList [RSAtom "chezscheme"] , RSAtom "record-case" ]
+      ]
+    , schDefine "add"  $ schLambdas ["m","n"] $ RSList [RSAtom "+", force (RSAtom "m"), force (RSAtom "n")]
+    , schDefine "sub"  $ schLambdas ["m","n"] $ RSList [RSAtom "-", force (RSAtom "m"), force (RSAtom "n")]
+    , schDefine "mul"  $ schLambdas ["m","n"] $ RSList [RSAtom "*", force (RSAtom "m"), force (RSAtom "n")]
+    , schDefine "quot" $ schLambdas ["m","n"] $ RSList [RSAtom "div", force (RSAtom "m"), force (RSAtom "n")]
+    , schDefine "rem"  $ schLambdas ["m","n"] $ RSList [RSAtom "mod", force (RSAtom "m"), force (RSAtom "n")]
+    , schDefine "iff"  $ schLambdas ["b","x","y"] $ RSList [RSAtom "if", force (RSAtom "b"), force (RSAtom "x"), force (RSAtom "y")]
+    , schDefine "eq"   $ schLambdas ["x","y"] $ RSList [RSAtom "=", force (RSAtom "x"), force (RSAtom "y")]
+    ]
 
 deriving instance Generic EvaluationStrategy
 deriving instance NFData  EvaluationStrategy
@@ -173,6 +192,8 @@ reservedNames = Set.fromList $ map T.pack
   , "library", "import", "export", "only"
   , "force", "delay"
   , "call-with-values", "call-with-current-continuation"
+  , "add", "sub", "mul", "quot", "rem"
+  , "iff", "eq"
   -- TODO: add more
   ]
 
@@ -184,6 +205,11 @@ initToSchemeState = ToSchemeState
   }
 
 type ToSchemeM a = StateT ToSchemeState (ReaderT ToSchemeEnv TCM) a
+
+runToSchemeM :: SchOptions -> ToSchemeM a -> TCM a
+runToSchemeM opts =
+    (`runReaderT` initToSchemeEnv opts)
+  . (`evalStateT` initToSchemeState)
 
 freshSchAtom :: ToSchemeM SchAtom
 freshSchAtom = do
@@ -198,6 +224,21 @@ freshSchAtom = do
 
 getEvaluationStrategy :: ToSchemeM EvaluationStrategy
 getEvaluationStrategy = reader $ schEvaluation . toSchemeOptions
+
+makeDelay :: ToSchemeM (SchForm -> SchForm)
+makeDelay = do
+  strat <- getEvaluationStrategy
+  case strat of
+    EagerEvaluation -> return id
+    LazyEvaluation  -> return schDelay
+
+makeForce :: ToSchemeM (SchForm -> SchForm)
+makeForce = do
+  strat <- getEvaluationStrategy
+  case strat of
+    EagerEvaluation -> return id
+    LazyEvaluation  -> return schForce
+
 
 getVarName :: Int -> ToSchemeM SchAtom
 getVarName i = reader $ (!! i) . toSchemeVars
@@ -322,54 +363,72 @@ instance ToScheme Definition (Maybe SchForm) where
 
 
 instance ToScheme TTerm SchForm where
-  toScheme v = case v of
-    TVar i -> do
-      name <- getVarName i
-      strat <- getEvaluationStrategy
-      return $ schForce strat $ RSAtom name
-    TPrim p -> toScheme p
-    TDef d -> do
-      d' <- toScheme d
-      return $ RSList [RSAtom d']
-    TApp f args -> do
-      f' <- toScheme f
-      strat <- getEvaluationStrategy
-      args' <- map (schDelay strat) <$> traverse toScheme args
-      return $ schApps f' args'
-    TLam v -> withFreshVar $ \x -> do
-      body <- toScheme v
-      return $ schLambda [x] body
-    TLit l -> toScheme l
-    TCon c -> do
-      c' <- toScheme c
-      return $ RSList [RSAtom c']
-    TLet u v -> do
-      expr <- toScheme u
-      withFreshVar $ \x -> do
+  toScheme v = do
+    v <- liftTCM $ eliminateLiteralPatterns v
+    case v of
+      TVar i -> do
+        name <- getVarName i
+        force <- makeForce
+        return $ force $ RSAtom name
+      TPrim p -> toScheme p
+      TDef d -> do
+        d' <- toScheme d
+        return $ RSList [RSAtom d']
+      TApp f args -> do
+        f' <- toScheme f
+        delay <- makeDelay
+        args' <- map delay <$> traverse toScheme args
+        return $ schApps f' args'
+      TLam v -> withFreshVar $ \x -> do
         body <- toScheme v
-        return $ schLet [(x,expr)] body
-    TCase i info v bs -> do
-      strat <- getEvaluationStrategy
-      x <- schForce strat . RSAtom <$> getVarName i
-      cases <- traverse toScheme bs
-      fallback <- if isUnreachable v
-                  then return Nothing
-                  else Just <$> toScheme v
-      return $ schCase x cases fallback
-    TUnit -> return schUnit
-    TSort -> return schUnit
-    TErased -> return schUnit
-    TCoerce u -> toScheme u
-    TError err -> toScheme err
+        return $ schLambda [x] body
+      TLit l -> toScheme l
+      TCon c -> do
+        c' <- toScheme c
+        return $ RSList [RSAtom c']
+      TLet u v -> do
+        delay <- makeDelay
+        expr <- delay <$> toScheme u
+        withFreshVar $ \x -> do
+          body <- toScheme v
+          return $ schLet [(x,expr)] body
+      TCase i info v bs -> do
+        force <- makeForce
+        x <- force . RSAtom <$> getVarName i
+        cases <- traverse toScheme bs
+        fallback <- if isUnreachable v
+                    then return Nothing
+                    else Just <$> toScheme v
+        return $ schCase x cases fallback
+      TUnit -> return schUnit
+      TSort -> return schUnit
+      TErased -> return schUnit
+      TCoerce u -> toScheme u
+      TError err -> toScheme err
 
     where
       isUnreachable v = v == TError TUnreachable
 
 instance ToScheme TPrim SchForm where
-  toScheme p = undefined
+  toScheme p = case p of
+    PAdd  -> return schAdd
+    PSub  -> return schSub
+    PMul  -> return schMul
+    PQuot -> return schQuot
+    PRem  -> return schRem
+    PIf   -> return schIf
+    PEqI  -> return schEq
+    _     -> return $ schError $ T.pack $ "not yet supported: primitive " ++ show p
 
 instance ToScheme Literal SchForm where
-  toScheme lit = undefined
+  toScheme lit = case lit of
+    LitNat    x -> return $ RSAtom (T.pack (show x))
+    LitWord64 x -> return $ schError "not yet supported: Word64 literals"
+    LitFloat  x -> return $ schError "not yet supported: Float literals"
+    LitString x -> return $ schError "not yet supported: String literals"
+    LitChar   x -> return $ schError "not yet supported: Char literals"
+    LitQName  x -> return $ schError "not yet supported: QName literals"
+    LitMeta p x -> return $ schError "not yet supported: Meta literals"
 
 -- TODO: allow literal branches and guard branches
 instance ToScheme TAlt SchForm where
@@ -379,7 +438,7 @@ instance ToScheme TAlt SchForm where
       return $ RSList [RSList [RSAtom (schConName c)], RSList (map RSAtom xs), body]
 
     TAGuard{} -> __IMPOSSIBLE__ -- TODO
-    TALit{}   -> __IMPOSSIBLE__ -- TODO
+    TALit{}   -> __IMPOSSIBLE__
 
 instance ToScheme TError SchForm where
   toScheme err = case err of
