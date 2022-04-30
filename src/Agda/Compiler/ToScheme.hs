@@ -26,6 +26,7 @@ import Agda.Utils.Singleton
 
 import Control.DeepSeq ( NFData )
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -116,14 +117,25 @@ schForce x
   | RSList [RSAtom "delay", y] <- x = y
   | otherwise                       = RSList [RSAtom "force", x]
 
-schAdd, schSub, schMul, schQuot, schRem, schIf, schEq :: SchForm
-schAdd  = RSList [RSAtom "add"]
-schSub  = RSList [RSAtom "sub"]
-schMul  = RSList [RSAtom "mul"]
-schQuot = RSList [RSAtom "quot"]
-schRem  = RSList [RSAtom "rem"]
-schIf   = RSList [RSAtom "iff"]
-schEq   = RSList [RSAtom "eq"]
+schOp :: Int -> Text -> [SchForm] -> ToSchemeM SchForm
+schOp n op args = do
+  let m = n - length args
+  unless (m >= 0) $ fail $ "primitive operation " <> T.unpack op <> " called with " <> show (length args) <> " arguments!"
+  force <- makeForce
+  vars <- freshSchAtoms m
+  let args2 = map RSAtom vars
+  return $ schLambdas vars $ RSList $ RSAtom op : map force (args ++ args2)
+
+schPrimOp :: TPrim -> [SchForm] -> ToSchemeM SchForm
+schPrimOp p args = case p of
+  PAdd  -> schOp 2 "+"   args
+  PSub  -> schOp 2 "-"   args
+  PMul  -> schOp 2 "*"   args
+  PQuot -> schOp 2 "div" args
+  PRem  -> schOp 2 "mod" args
+  PIf   -> schOp 3 "if"  args
+  PEqI  -> schOp 2 "="   args
+  _     -> fail $ "not yet supported: primitive " ++ show p
 
 schPreamble :: ToSchemeM [SchForm]
 schPreamble = do
@@ -133,13 +145,6 @@ schPreamble = do
       [ RSAtom "import"
       , RSList [ RSAtom "only" , RSList [RSAtom "chezscheme"] , RSAtom "record-case" ]
       ]
-    , schDefine "add"  $ schLambdas ["m","n"] $ RSList [RSAtom "+", force (RSAtom "m"), force (RSAtom "n")]
-    , schDefine "sub"  $ schLambdas ["m","n"] $ RSList [RSAtom "-", force (RSAtom "m"), force (RSAtom "n")]
-    , schDefine "mul"  $ schLambdas ["m","n"] $ RSList [RSAtom "*", force (RSAtom "m"), force (RSAtom "n")]
-    , schDefine "quot" $ schLambdas ["m","n"] $ RSList [RSAtom "div", force (RSAtom "m"), force (RSAtom "n")]
-    , schDefine "rem"  $ schLambdas ["m","n"] $ RSList [RSAtom "mod", force (RSAtom "m"), force (RSAtom "n")]
-    , schDefine "iff"  $ schLambdas ["b","x","y"] $ RSList [RSAtom "if", force (RSAtom "b"), force (RSAtom "x"), force (RSAtom "y")]
-    , schDefine "eq"   $ schLambdas ["x","y"] $ RSList [RSAtom "=", force (RSAtom "x"), force (RSAtom "y")]
     ]
 
 deriving instance Generic EvaluationStrategy
@@ -221,6 +226,9 @@ freshSchAtom = do
       ifM (isNameUsed x) freshSchAtom $ {-otherwise-} do
         setNameUsed x
         return x
+
+freshSchAtoms :: Int -> ToSchemeM [SchAtom]
+freshSchAtoms n = replicateM n freshSchAtom
 
 getEvaluationStrategy :: ToSchemeM EvaluationStrategy
 getEvaluationStrategy = reader $ schEvaluation . toSchemeOptions
@@ -370,10 +378,11 @@ instance ToScheme TTerm SchForm where
         name <- getVarName i
         force <- makeForce
         return $ force $ RSAtom name
-      TPrim p -> toScheme p
+      TPrim p -> toScheme (p , [] :: [TTerm])
       TDef d -> do
         d' <- toScheme d
         return $ RSList [RSAtom d']
+      TApp (TPrim p) args -> toScheme (p,args)
       TApp f args -> do
         f' <- toScheme f
         delay <- makeDelay
@@ -409,16 +418,11 @@ instance ToScheme TTerm SchForm where
     where
       isUnreachable v = v == TError TUnreachable
 
-instance ToScheme TPrim SchForm where
-  toScheme p = case p of
-    PAdd  -> return schAdd
-    PSub  -> return schSub
-    PMul  -> return schMul
-    PQuot -> return schQuot
-    PRem  -> return schRem
-    PIf   -> return schIf
-    PEqI  -> return schEq
-    _     -> return $ schError $ T.pack $ "not yet supported: primitive " ++ show p
+instance ToScheme (TPrim,[TTerm]) SchForm where
+  toScheme (p,args) = do
+    delay <- makeDelay
+    args' <- map delay <$> traverse toScheme args
+    schPrimOp p args'
 
 instance ToScheme Literal SchForm where
   toScheme lit = case lit of
