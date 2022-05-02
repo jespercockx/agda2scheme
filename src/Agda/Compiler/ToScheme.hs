@@ -135,6 +135,8 @@ schPrimOp p args = case p of
   PRem  -> schOp 2 "mod" args
   PIf   -> schOp 3 "if"  args
   PEqI  -> schOp 2 "="   args
+  PGeq  -> schOp 2 ">="  args
+  PLt   -> schOp 2 "<"   args
   _     -> fail $ "not yet supported: primitive " ++ show p
 
 schPreamble :: ToSchemeM [SchForm]
