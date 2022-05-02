@@ -395,8 +395,12 @@ instance ToScheme TTerm SchForm where
         return $ schLambda [x] body
       TLit l -> toScheme l
       TCon c -> do
-        c' <- toScheme c
-        return $ RSList [RSAtom c']
+        special <- isSpecialConstructor c
+        case special of
+          Nothing -> do
+            c' <- toScheme c
+            return $ RSList [RSAtom c']
+          Just v  -> return v
       TLet u v -> do
         delay <- makeDelay
         expr <- delay <$> toScheme u
@@ -406,11 +410,29 @@ instance ToScheme TTerm SchForm where
       TCase i info v bs -> do
         force <- makeForce
         x <- force . RSAtom <$> getVarName i
-        cases <- traverse toScheme bs
-        fallback <- if isUnreachable v
-                    then return Nothing
-                    else Just <$> toScheme v
-        return $ schCase x cases fallback
+        special <- isSpecialCase info
+        case special of
+          Nothing -> do
+            cases <- traverse toScheme bs
+            fallback <- if isUnreachable v
+                        then return Nothing
+                        else Just <$> toScheme v
+            return $ schCase x cases fallback
+          Just BoolCase -> case bs of
+            [] -> __IMPOSSIBLE__
+            (TACon c1 _ v1 : bs') -> do
+              Con trueC  _ _ <- primTrue
+              Con falseC _ _ <- primFalse
+              v1' <- toScheme v1
+              v2' <- case bs' of
+                []                 -> toScheme v
+                (TACon _ _ v2 : _) -> toScheme v2
+                _                  -> __IMPOSSIBLE__
+              let (thenBranch,elseBranch)
+                    | c1 == conName trueC  = (v1',v2')
+                    | c1 == conName falseC = (v2',v1')
+                    | otherwise            = __IMPOSSIBLE__
+              return $ RSList [RSAtom "if", x, thenBranch, elseBranch]
       TUnit -> return schUnit
       TSort -> return schUnit
       TErased -> return schUnit
@@ -436,7 +458,6 @@ instance ToScheme Literal SchForm where
     LitQName  x -> return $ schError "not yet supported: QName literals"
     LitMeta p x -> return $ schError "not yet supported: Meta literals"
 
--- TODO: allow literal branches and guard branches
 instance ToScheme TAlt SchForm where
   toScheme alt = case alt of
     TACon c nargs v -> withFreshVars nargs $ \xs -> do
@@ -450,3 +471,23 @@ instance ToScheme TError SchForm where
   toScheme err = case err of
     TUnreachable -> return $ schError "Panic!"
     TMeta s      -> return $ schError $ "encountered unsolved meta: " <> T.pack s
+
+isSpecialConstructor :: QName -> ToSchemeM (Maybe SchForm)
+isSpecialConstructor c = do
+  Con trueCon  _ _ <- primTrue
+  Con falseCon _ _ <- primFalse
+  if | c == conName trueCon  -> return $ Just $ RSAtom "#t"
+     | c == conName falseCon -> return $ Just $ RSAtom "#f"
+     | otherwise             -> return Nothing
+
+-- Some kinds of case statements are treated in a special way.
+-- Currently, matches on Bool are translated to an `if` statement.
+data SpecialCase = BoolCase
+
+isSpecialCase :: CaseInfo -> ToSchemeM (Maybe SpecialCase)
+isSpecialCase (CaseInfo lazy (CTData q cty)) = do
+  boolTy <- primBool
+  if boolTy == Def cty []
+    then return (Just BoolCase)
+    else return Nothing
+specialCase _ = return Nothing
