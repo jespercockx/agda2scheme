@@ -14,6 +14,7 @@ import Agda.Syntax.Treeless
 
 import Agda.TypeChecking.Monad
 import Agda.TypeChecking.Pretty
+import Agda.TypeChecking.Primitive.Base
 
 import Agda.Utils.Impossible
 import Agda.Utils.Lens
@@ -147,6 +148,9 @@ schPreamble = do
       [ RSAtom "import"
       , RSList [ RSAtom "only" , RSList [RSAtom "chezscheme"] , RSAtom "record-case" ]
       ]
+      -- TODO: put this in a separate file and import it here
+    , schDefine "monus" $ schLambdas ["x","y"] $
+      RSList [RSAtom "max", RSAtom "0", RSList [RSAtom "-", force (RSAtom "x"), force (RSAtom "y")]]
     ]
 
 deriving instance Generic EvaluationStrategy
@@ -200,7 +204,7 @@ reservedNames = Set.fromList $ map T.pack
   , "force", "delay"
   , "call-with-values", "call-with-current-continuation"
   , "add", "sub", "mul", "quot", "rem"
-  , "iff", "eq"
+  , "iff", "eq", "monus"
   -- TODO: add more
   ]
 
@@ -371,43 +375,49 @@ instance ToScheme Definition (Maybe SchForm) where
       AbstractDefn{} -> __IMPOSSIBLE__
       DataOrRecSig{} -> __IMPOSSIBLE__
 
-
 instance ToScheme TTerm SchForm where
   toScheme v = do
     v <- liftTCM $ eliminateLiteralPatterns v
-    case v of
+    let (w, args) = tAppView v
+    delay <- makeDelay
+    args' <- map delay <$> traverse toScheme args
+    let applyToArgs f = return $ schApps f args'
+    case w of
       TVar i -> do
         name <- getVarName i
         force <- makeForce
-        return $ force $ RSAtom name
-      TPrim p -> toScheme (p , [] :: [TTerm])
+        applyToArgs $ force $ RSAtom name
+      TPrim p -> toScheme (p , args)
       TDef d -> do
-        d' <- toScheme d
-        return $ RSList [RSAtom d']
-      TApp (TPrim p) args -> toScheme (p,args)
-      TApp f args -> do
-        f' <- toScheme f
-        delay <- makeDelay
-        args' <- map delay <$> traverse toScheme args
-        return $ schApps f' args'
+        special <- isSpecialDefinition d
+        case special of
+          Nothing -> do
+            d' <- toScheme d
+            applyToArgs $ RSList [RSAtom d']
+          Just v -> applyToArgs v
       TLam v -> withFreshVar $ \x -> do
+        unless (null args) __IMPOSSIBLE__
         body <- toScheme v
         return $ schLambda [x] body
-      TLit l -> toScheme l
+      TLit l -> do
+        unless (null args) __IMPOSSIBLE__
+        toScheme l
       TCon c -> do
         special <- isSpecialConstructor c
         case special of
           Nothing -> do
             c' <- toScheme c
-            return $ RSList [RSAtom c']
-          Just v  -> return v
+            applyToArgs $ RSList [RSAtom c']
+          Just v  -> applyToArgs v
       TLet u v -> do
+        unless (null args) __IMPOSSIBLE__
         delay <- makeDelay
         expr <- delay <$> toScheme u
         withFreshVar $ \x -> do
           body <- toScheme v
           return $ schLet [(x,expr)] body
       TCase i info v bs -> do
+        unless (null args) __IMPOSSIBLE__
         force <- makeForce
         x <- force . RSAtom <$> getVarName i
         special <- isSpecialCase info
@@ -433,11 +443,16 @@ instance ToScheme TTerm SchForm where
                     | c1 == conName falseC = (v2',v1')
                     | otherwise            = __IMPOSSIBLE__
               return $ RSList [RSAtom "if", x, thenBranch, elseBranch]
-      TUnit -> return schUnit
-      TSort -> return schUnit
+      TUnit -> do
+        unless (null args) __IMPOSSIBLE__
+        return schUnit
+      TSort -> do
+        unless (null args) __IMPOSSIBLE__
+        return schUnit
       TErased -> return schUnit
-      TCoerce u -> toScheme u
+      TCoerce u -> applyToArgs =<< toScheme u
       TError err -> toScheme err
+      TApp f args -> __IMPOSSIBLE__
 
     where
       isUnreachable v = v == TError TUnreachable
@@ -479,6 +494,12 @@ isSpecialConstructor c = do
   if | c == conName trueCon  -> return $ Just $ RSAtom "#t"
      | c == conName falseCon -> return $ Just $ RSAtom "#f"
      | otherwise             -> return Nothing
+
+isSpecialDefinition :: QName -> ToSchemeM (Maybe SchForm)
+isSpecialDefinition f = do
+  minusDef <- getBuiltinName builtinNatMinus
+  if | Just f == minusDef -> return $ Just $ RSList [RSAtom "monus"]
+     | otherwise          -> return Nothing
 
 -- Some kinds of case statements are treated in a special way.
 -- Currently, matches on Bool are translated to an `if` statement.

@@ -4,17 +4,19 @@ open import Agda.Builtin.Nat
 
 variable A B : Set
 
-if_then_else_ : Bool → A → A → A
-if true  then x else y = x
-if false then x else y = y
-
 data List (A : Set) : Set where
   [] : List A
   _::_ : A → List A → List A
 
+infixr 5 _::_
+
 filter : (A → Bool) → List A → List A
 filter p [] = []
-filter p (x :: xs) = if p x then x :: filter p xs else filter p xs
+filter p (x :: xs) with p x
+... | true  = x :: filter p xs
+... | false = filter p xs
+-- ^ I'm using `with` instead of `if_then_else_` so that this test
+--   case also works with strict evaluation.
 
 _++_ : List A → List A → List A
 []        ++ ys = ys
@@ -36,9 +38,17 @@ record Triple : Set where
   field
     fst snd trd : Nat
 
-triples : Nat → List Triple
-triples top =
-  filter (λ (triple x y z) → x * x + y * y == z * z)
-         (range 1 top >>= λ z → range 1 z >>= λ y → range 1 y >>= λ x → (triple x y z) :: [])
+alltriples : Nat → List Triple
+alltriples top = range 1 top >>= λ z → range 1 z >>= λ y → range 1 y >>= λ x → (triple x y z) :: []
 
-test1 = triples 100
+cartesian : Triple → Bool
+cartesian (triple x y z) = x * x + y * y == z * z
+
+triples : Nat → List Triple
+triples top = filter cartesian (alltriples top)
+
+sumall : List Triple → Nat
+sumall [] = 0
+sumall (triple x y z :: xs) = x + y + z + sumall xs
+
+test1 = sumall (triples 200) -- evaluates to 33638
