@@ -85,17 +85,11 @@ schLet binds body = RSList
   , body
   ]
 
-schConName :: QName -> SchAtom
-schConName x = T.pack $ prettyShow $ qnameName x
+schConAtom :: SchAtom -> SchAtom
+schConAtom x = T.singleton '\'' <> x
 
-schConAtom :: QName -> SchAtom
-schConAtom x = T.singleton '\'' <> schConName x
-
-schConApp :: QName -> [SchForm] -> SchForm
-schConApp c vs = RSList $
-  [ RSAtom "list"
-  , RSAtom (schConAtom c)
-  ] ++ vs
+schConApp :: SchAtom -> [SchForm] -> SchForm
+schConApp c vs = RSList $ [ RSAtom "list" , RSAtom (schConAtom c) ] ++ vs
 
 schCase :: SchForm -> [SchForm] -> Maybe SchForm -> SchForm
 schCase x cases maybeFallback = RSList $
@@ -370,7 +364,7 @@ instance ToScheme Definition (Maybe SchForm) where
         let c = conName chead
         c' <- toScheme c
         withFreshVars nargs $ \xs ->
-          return $ Just $ schDefine c' $ schLambdas xs $ schConApp c $ map RSAtom xs
+          return $ Just $ schDefine c' $ schLambdas xs $ schConApp c' $ map RSAtom xs
 
       AbstractDefn{} -> __IMPOSSIBLE__
       DataOrRecSig{} -> __IMPOSSIBLE__
@@ -476,8 +470,9 @@ instance ToScheme Literal SchForm where
 instance ToScheme TAlt SchForm where
   toScheme alt = case alt of
     TACon c nargs v -> withFreshVars nargs $ \xs -> do
+      c' <- toScheme c
       body <- toScheme v
-      return $ RSList [RSList [RSAtom (schConName c)], RSList (map RSAtom xs), body]
+      return $ RSList [RSList [RSAtom c'], RSList (map RSAtom xs), body]
 
     TAGuard{} -> __IMPOSSIBLE__ -- TODO
     TALit{}   -> __IMPOSSIBLE__
