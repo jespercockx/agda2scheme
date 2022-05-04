@@ -132,11 +132,13 @@ schPrimOp p args = case p of
   PEqI  -> schOp 2 "="   args
   PGeq  -> schOp 2 ">="  args
   PLt   -> schOp 2 "<"   args
+  PSeq  -> schOp 2 "seq" args
   _     -> fail $ "not yet supported: primitive " ++ show p
 
 schPreamble :: ToSchemeM [SchForm]
 schPreamble = do
   force <- makeForce
+  strat <- getEvaluationStrategy
   return
     [ RSList
       [ RSAtom "import"
@@ -145,6 +147,9 @@ schPreamble = do
       -- TODO: put this in a separate file and import it here
     , schDefine "monus" $ schLambdas ["x","y"] $
       RSList [RSAtom "max", RSAtom "0", RSList [RSAtom "-", force (RSAtom "x"), force (RSAtom "y")]]
+    , schDefine "seq" $ schLambdas ["x","y"] $ case strat of
+        EagerEvaluation -> RSAtom "y"
+        LazyEvaluation  -> RSList [RSAtom "begin", force (RSAtom "x"), RSAtom "y"]
     ]
 
 deriving instance Generic EvaluationStrategy
@@ -198,7 +203,7 @@ reservedNames = Set.fromList $ map T.pack
   , "force", "delay"
   , "call-with-values", "call-with-current-continuation"
   , "add", "sub", "mul", "quot", "rem"
-  , "iff", "eq", "monus"
+  , "iff", "eq", "monus", "seq"
   -- TODO: add more
   ]
 
