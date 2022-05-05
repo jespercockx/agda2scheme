@@ -44,7 +44,7 @@ main = runAgda [backend]
 backend :: Backend
 backend = Backend backend'
 
-backend' :: Backend' SchOptions SchOptions () () (Maybe SchForm)
+backend' :: Backend' SchOptions SchOptions () () (IsMain, Definition)
 backend' = Backend'
   { backendName           = "agda2scheme"
   , options               = SchOptions EagerEvaluation
@@ -53,7 +53,7 @@ backend' = Backend'
   , preCompile            = schPreCompile
   , postCompile           = \ _ _ _ -> return ()
   , preModule             = \ _ _ _ _ -> return $ Recompile ()
-  , compileDef            = schCompileDef
+  , compileDef            = \ _ _ isMain def -> return (isMain,def)
   , postModule            = schPostModule
   , backendVersion        = Nothing
   , scopeCheckingSuffices = False
@@ -71,15 +71,17 @@ schFlags =
 schPreCompile :: SchOptions -> TCM SchOptions
 schPreCompile opts = return opts
 
-schCompileDef :: SchOptions -> () -> IsMain -> Definition -> TCM (Maybe SchForm)
-schCompileDef opts _ isMain def = runToSchemeM opts $ toScheme def
-
-schPostModule :: SchOptions -> () -> IsMain -> ModuleName -> [Maybe SchForm] -> TCM ()
+schPostModule :: SchOptions -> () -> IsMain -> ModuleName -> [(IsMain, Definition)] -> TCM ()
 schPostModule opts _ isMain modName defs = do
-  preamble <- runToSchemeM opts schPreamble
   let defToText = encodeOne printer . fromRich
-      modText   = T.intercalate "\n\n" $ map defToText $ preamble ++ catMaybes defs
       fileName  = prettyShow (last $ mnameToList modName) ++ ".ss"
+
+  modText <- runToSchemeM opts $ do
+    ps  <- schPreamble
+    ts <- catMaybes <$> traverse defToTreeless (map snd defs)
+    ds <- traverse toScheme ts
+    return $ T.intercalate "\n\n" $ map defToText $ ps ++ ds
+
   liftIO $ T.writeFile fileName modText
 
   where

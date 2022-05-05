@@ -1,105 +1,133 @@
 (import (only (chezscheme) record-case))
 
-(define (monus) (lambda (x) (lambda (y) (max 0 (- x y)))))
+(define (monus x y) (max 0 (- (force x) (force y))))
 
-(define (\x5B;\x5D;) (list '[]))
+(define (seq x y) (begin (force x) y))
 
-(define (_::_) (lambda (a) (lambda (b) (list '_::_ a
-b))))
+(define (if_then_else_ a b
+c
+d) (if (force b) (force c)
+(force d)))
+
+(define (id e f) (force f))
 
 (define 
-  (filter)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
+  (filter g h
+i)
+  (record-case 
+    (force i)
+    ((\x5B;\x5D;) () (force i))
+    ((_::_) 
+      (j k)
+      ((if_then_else_ 
+         (delay (list))
+         (delay ((force h) j))
+         (delay (lambda (l) (list '_::_ j
+l)))
+         (delay (lambda (m) (force m)))) 
+        (delay (filter (delay (list)) h
+k))))))
+
+(define 
+  (_++_ n o
+p)
+  (record-case 
+    (force o)
+    ((\x5B;\x5D;) () (force p))
+    ((_::_) (q r) (list '_::_ q
+(delay (_++_ (delay (list)) r
+p))))))
+
+(define 
+  (_>>=_ s t
+u
+v)
+  (record-case 
+    (force u)
+    ((\x5B;\x5D;) () (force u))
+    ((_::_) 
+      (w x)
+      (_++_ (delay (list)) (delay ((force v) w))
+(delay (_>>=_ (delay (list)) (delay (list))
+x
+v))))))
+
+(define (range y z) (go (delay (list)) (delay (list))
+(delay (monus (delay (+ 1 (force z))) y))
+y))
+
+(define 
+  (go a1 b1
+c1
+d1)
+  (if 
+    (= 0 (force c1))
+    (list '\x5B;\x5D;)
+    (let 
+      ((f1 (delay (- (force c1) 1))))
+      (list '_::_ d1
+(delay (go (delay (list)) (delay (list))
+f1
+(delay (+ 1 (force d1)))))))))
+
+(define (fst g1) (record-case (force g1) ((triple) (h1 i1 j1) (force h1))))
+
+(define (snd k1) (record-case (force k1) ((triple) (l1 m1 n1) (force m1))))
+
+(define (trd o1) (record-case (force o1) ((triple) (p1 q1 r1) (force r1))))
+
+(define 
+  (alltriples s1)
+  (_>>=_ 
+    (delay (list))
+    (delay (list))
+    (delay (range (delay 1) s1))
+    (delay 
       (lambda 
-        (c)
-        (record-case 
-          c
-          (([]) () c)
-          ((_::_) (d e) (let ((f (b d))) (if f (((_::_) d) ((((filter) (list)) b) e))
-((((filter) (list)) b) e)))))))))
+        (t1)
+        (_>>=_ 
+          (delay (list))
+          (delay (list))
+          (delay (range (delay 1) t1))
+          (delay 
+            (lambda 
+              (u1)
+              (_>>=_ 
+                (delay (list))
+                (delay (list))
+                (delay (range (delay 1) u1))
+                (delay 
+                  (lambda 
+                    (v1)
+                    (list 
+                      '_::_
+                      (delay (list 'triple v1
+u1
+t1))
+                      (delay (list '\x5B;\x5D;)))))))))))))
 
 (define 
-  (testfilter)
-  ((((filter) (list)) (lambda (a) (< a 5))) (((_::_) 2) (((_::_) 4) (((_::_) 6) (((_::_) 8) (((_::_) 10) (\x5B;\x5D;))))))))
+  (pythagorean w1)
+  (record-case 
+    (force w1)
+    ((triple) 
+      (x1 y1 z1)
+      (= (+ (* (force x1) (force x1)) (* (force y1) (force y1))) (* (force z1) (force z1))))))
 
 (define 
-  (_++_)
-  (lambda (a) (lambda (b) (lambda (c) (record-case b (([]) () c)
-((_::_) (d e) (((_::_) d) ((((_++_) (list)) e) c))))))))
-
-(define (test++) ((((_++_) (list)) (((_::_) 1) (((_::_) 2) (\x5B;\x5D;)))) (((_::_) 3) (((_::_) 4) (\x5B;\x5D;)))))
+  (triples a2)
+  (filter (delay (list)) (delay (lambda (b2) (pythagorean b2)))
+(delay (alltriples a2))))
 
 (define 
-  (_>>=_)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (record-case c (([]) () c)
-((_::_) (e f) ((((_++_) (list)) (d e)) (((((_>>=_) (list)) (list)) f) d)))))))))
+  (sumall c2)
+  (record-case 
+    (force c2)
+    ((\x5B;\x5D;) () 0)
+    ((_::_) 
+      (d2 e2)
+      (record-case 
+        (force d2)
+        ((triple) (f2 g2 h2) (+ (+ (+ (sumall e2) (force f2)) (force g2)) (force h2)))))))
 
-(define 
-  (testbind)
-  (((((_>>=_) (list)) (list)) (((_::_) 1) (((_::_) 2) (\x5B;\x5D;)))) 
-    (lambda (a) (((_::_) (+ 1 a)) (((_::_) (+ 2 a)) (\x5B;\x5D;))))))
-
-(define (range) (lambda (a) (lambda (b) (((((go) (list)) (list)) (((monus) (+ 1 b)) a)) a))))
-
-(define 
-  (go)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda (d) (if (= 0 c) (\x5B;\x5D;)
-(let ((f (- c 1))) (((_::_) d) (((((go) (list)) (list)) f) (+ 1 d))))))))))
-
-(define (fst) (lambda (a) (record-case a ((triple) (b c d) b))))
-
-(define (snd) (lambda (a) (record-case a ((triple) (b c d) c))))
-
-(define (trd) (lambda (a) (record-case a ((triple) (b c d) d))))
-
-(define (triple) (lambda (a) (lambda (b) (lambda (c) (list 'triple a
-b
-c)))))
-
-(define 
-  (alltriples)
-  (lambda 
-    (a)
-    (((((_>>=_) (list)) (list)) (((range) 1) a)) 
-      (lambda 
-        (b)
-        (((((_>>=_) (list)) (list)) (((range) 1) b)) 
-          (lambda 
-            (c)
-            (((((_>>=_) (list)) (list)) (((range) 1) c)) (lambda (d) (((_::_) ((((triple) d) c) b)) (\x5B;\x5D;))))))))))
-
-(define (testalltriples) ((alltriples) 5))
-
-(define (cartesian) (lambda (a) (record-case a ((triple) (b c d) (= (+ (* b b) (* c c)) (* d d))))))
-
-(define (testcartesian) ((cartesian) ((((triple) 3) 4) 5)))
-
-(define (triples) (lambda (a) ((((filter) (list)) (cartesian)) ((alltriples) a))))
-
-(define 
-  (sumall)
-  (lambda 
-    (a)
-    (record-case 
-      a
-      (([]) () 0)
-      ((_::_) (b c) (record-case b ((triple) (d e f) (+ (+ (+ ((sumall) c) d) e) f)))))))
-
-(define (test1) ((sumall) ((triples) 200)))
+(define (test1) (sumall (delay (triples (delay 200)))))

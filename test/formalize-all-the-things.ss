@@ -1,53 +1,35 @@
 (import (only (chezscheme) record-case))
 
-(define (monus) (lambda (x) (lambda (y) (max 0 (- x y)))))
+(define (monus x y) (max 0 (- x y)))
 
-(define (seq) (lambda (x) (lambda (y) y)))
+(define (seq x y) y)
 
-(define (\x5B;\x5D;) (list '\x5B;\x5D;))
+(define (it a b) b)
 
-(define (_∷_) (lambda (a) (lambda (b) (list '_∷_ a
-b))))
+(define (mapMaybe c d
+e
+f) (record-case f ((just) (g) (list 'just (e g)))
+((nothing) () f)))
 
-(define (it) (lambda (a) (lambda (b) b)))
+(define (testMapMaybe) (mapMaybe (list) (list)
+(lambda (h) (+ 1 h))
+(list 'just 5)))
 
-(define (just) (lambda (a) (list 'just a)))
+(define (fst i) (record-case i ((_\x2C;_) (j k) j)))
 
-(define (nothing) (list 'nothing))
+(define (snd l) (record-case l ((_\x2C;_) (m n) n)))
 
-(define 
-  (mapMaybe)
-  (lambda (a) (lambda (b) (lambda (c) (lambda (d) (record-case d ((just) (e) ((just) (c e)))
-((nothing) () d)))))))
+(define (mapInl o p
+q
+r
+s) (record-case s ((inl) (t) (list 'inl (r t)))
+((inr) (u) s)))
 
-(define (testMapMaybe) (((((mapMaybe) (list)) (list)) (lambda (a) (+ 1 a))) ((just) 5)))
-
-(define (fst) (lambda (a) (record-case a ((_\x2C;_) (b c) b))))
-
-(define (snd) (lambda (a) (record-case a ((_\x2C;_) (b c) c))))
-
-(define (_\x2C;_) (lambda (a) (lambda (b) (list '_\x2C;_ a
-b))))
-
-(define (inl) (lambda (a) (list 'inl a)))
-
-(define (inr) (lambda (a) (list 'inr a)))
-
-(define 
-  (mapInl)
-  (lambda 
-    (a)
-    (lambda (b) (lambda (c) (lambda (d) (lambda (e) (record-case e ((inl) (f) ((inl) (d f)))
-((inr) (g) e))))))))
-
-(define 
-  (mapInr)
-  (lambda 
-    (a)
-    (lambda (b) (lambda (c) (lambda (d) (lambda (e) (record-case e ((inl) (f) e)
-((inr) (g) ((inr) (d g))))))))))
-
-(define (tt) (list 'tt))
+(define (mapInr v w
+x
+y
+z) (record-case z ((inl) (a1) z)
+((inr) (b1) (list 'inr (y b1)))))
 
 (define (¬_) (list))
 
@@ -57,380 +39,433 @@ b))))
 
 (define (cong) (list))
 
-(define (subst) (lambda (a) (lambda (b) (lambda (c) (lambda (d) (lambda (e) (lambda (f) f)))))))
-
-(define (≤-zero) (lambda (a) (list '≤-zero a)))
-
-(define (≤-suc) (lambda (a) (lambda (b) (lambda (c) (list '≤-suc a
-b
-c)))))
-
-(define (≤-refl) (lambda (a) (if (= 0 a) ((≤-zero) (list))
-(let ((c (- a 1))) ((((≤-suc) (list)) (list)) ((≤-refl) c))))))
+(define (subst c1 d1
+e1
+f1
+g1
+h1) h1)
 
 (define 
-  (≤-trans)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (lambda 
-            (e)
-            (record-case 
-              d
-              ((≤-zero) (f) ((≤-zero) (list)))
-              ((≤-suc) 
-                (g h i)
-                (record-case 
-                  e
-                  ((≤-suc) (j k l) ((((≤-suc) (list)) (list)) ((((((≤-trans) (list)) (list)) (list)) i) l))))))))))))
+  (≤-refl i1)
+  (if (= 0 i1) (list '≤-zero (list))
+(let ((k1 (- i1 1))) (list '≤-suc (list)
+(list)
+(≤-refl k1)))))
+
+(define 
+  (≤-trans l1 m1
+n1
+o1
+p1)
+  (record-case 
+    o1
+    ((≤-zero) (q1) (list '≤-zero (list)))
+    ((≤-suc) 
+      (r1 s1 t1)
+      (record-case 
+        p1
+        ((≤-suc) (u1 v1 w1) (list '≤-suc (list)
+(list)
+(≤-trans (list) (list)
+(list)
+t1
+w1)))))))
 
 (define (≤-antisym) (list))
 
 (define (So) (list))
 
 (define 
-  (≤-dec)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (if (= 0 a) ((≤-zero) (list))
-(let ((e (- a 1))) ((((≤-suc) (list)) (list)) ((((≤-dec) e) (list)) (list)))))))))
+  (≤-dec x1 y1
+z1)
+  (if 
+    (= 0 x1)
+    (list '≤-zero (list))
+    (let ((b2 (- x1 1))) (list '≤-suc (list)
+(list)
+(≤-dec b2 (list)
+(list))))))
 
 (define (_≤_) (list))
 
-(define (≤-refl) (lambda (a) (record-case a ((Ord.constructor) (b c d
-e) c))))
+(define (z≤-refl c2) (record-case c2 ((Ord.constructor) (d2 e2 f2
+g2) e2)))
 
-(define (≤-trans) (lambda (a) (record-case a ((Ord.constructor) (b c d
-e) d))))
+(define (z≤-trans h2) (record-case h2 ((Ord.constructor) (i2 j2 k2
+l2) k2)))
 
-(define (≤-antisym) (list))
+(define (z≤-antisym) (list))
 
 (define (_≥_) (list))
 
 (define 
   (Ord-Nat)
-  (((((Ord.constructor) (list)) (lambda (a) ((≤-refl) a))) 
-     (lambda (b) (lambda (c) (lambda (d) ((((≤-trans) (list)) (list)) (list)))))) 
+  (list 
+    'Ord.constructor
+    (list)
+    (lambda (m2) (≤-refl m2))
+    (lambda 
+      (n2)
+      (lambda (o2) (lambda (p2) (lambda (q2) (lambda (r2) (≤-trans (list) (list)
+(list)
+q2
+r2))))))
     (list)))
 
 (define 
   (Ord-⊤)
-  (((((Ord.constructor) (list)) (lambda (a) (list))) 
-     (lambda (b) (lambda (c) (lambda (d) (lambda (e) (lambda (f) (list))))))) 
+  (list 
+    'Ord.constructor
+    (list)
+    (lambda (s2) (list))
+    (lambda (t2) (lambda (u2) (lambda (v2) (lambda (w2) (lambda (x2) (list))))))
     (list)))
 
-(define (less) (lambda (a) (lambda (b) (lambda (c) (list 'less a
-b
-c)))))
+(define (Ord-A y2) (record-case y2 ((TDO.constructor) (z2 a3) z2)))
 
-(define (equal) (lambda (a) (lambda (b) (lambda (c) (list 'equal a
-b
-c)))))
-
-(define (greater) (lambda (a) (lambda (b) (lambda (c) (list 'greater a
-b
-c)))))
-
-(define (Ord-A) (lambda (a) (record-case a ((TDO.constructor) (b c) b))))
-
-(define (tri) (lambda (a) (record-case a ((TDO.constructor) (b c) c))))
+(define (tri b3) (record-case b3 ((TDO.constructor) (c3 d3) d3)))
 
 (define 
-  (triNat)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
+  (triNat e3 f3)
+  (if 
+    (= 0 e3)
+    (if (= 0 f3) (list 'equal (list)
+(list)
+(list))
+(list 'less (list)
+(list)
+(≤-dec 0 (list)
+(list))))
+    (let 
+      ((d4 (- e3 1)))
       (if 
-        (= 0 a)
-        (if (= 0 b) ((((equal) (list)) (list)) (list))
-((((less) (list)) (list)) ((((≤-dec) 0) (list)) (list))))
+        (= 0 f3)
+        (list 'greater (list)
+(list)
+(≤-dec 0 (list)
+(list)))
         (let 
-          ((z (- a 1)))
-          (if 
-            (= 0 b)
-            ((((greater) (list)) (list)) ((((≤-dec) 0) (list)) (list)))
-            (let 
-              ((l1 (- b 1)))
-              (let 
-                ((m1 (((triNat) z) l1)))
-                (record-case 
-                  m1
-                  ((less) (n1 o1 p1) ((((less) (list)) (list)) ((((≤-suc) (list)) (list)) p1)))
-                  ((equal) (q1 r1 s1) ((((equal) (list)) (list)) (list)))
-                  ((greater) (t1 u1 v1) ((((greater) (list)) (list)) ((((≤-suc) (list)) (list)) v1))))))))))))
+          ((p4 (- f3 1)))
+          (let 
+            ((q4 (triNat d4 p4)))
+            (record-case 
+              q4
+              ((less) (r4 s4 t4) (list 'less (list)
+(list)
+(list '≤-suc (list)
+(list)
+t4)))
+              ((equal) (u4 v4 w4) (list 'equal (list)
+(list)
+(list)))
+              ((greater) (x4 y4 z4) (list 'greater (list)
+(list)
+(list '≤-suc (list)
+(list)
+z4))))))))))
 
-(define (testTriNat) (((triNat) 3) 5))
+(define (testTriNat) (triNat 3 5))
 
-(define (TDO-Nat) (((TDO.constructor) (Ord-Nat)) (triNat)))
-
-(define (-∞) (list '-∞))
-
-(define (\x5B;_\x5D;) (lambda (a) (list '\x5B;_\x5D; a)))
-
-(define (+∞) (list '+∞))
-
-(define (-∞-≤) (lambda (a) (list '-∞-≤ a)))
-
-(define (\x5B;\x5D;-≤) (lambda (a) (lambda (b) (lambda (c) (list '\x5B;\x5D;-≤ a
-b
-c)))))
-
-(define (+∞-≤) (lambda (a) (list '+∞-≤ a)))
+(define (TDO-Nat) (list 'TDO.constructor (Ord-Nat)
+(lambda (a5) (lambda (b5) (triNat a5 b5)))))
 
 (define 
-  (\x5B;\x5D;∞-refl)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
+  (\x5B;\x5D;∞-refl c5 d5
+e5)
+  (record-case 
+    e5
+    ((-∞) () (list '-∞-≤ (list)))
+    ((\x5B;_\x5D;) (f5) (list '\x5B;\x5D;-≤ (list)
+(list)
+((z≤-refl d5) f5)))
+    ((+∞) () (list '+∞-≤ (list)))))
+
+(define 
+  (\x5B;\x5D;∞-trans g5 h5
+i5
+j5
+k5
+l5
+m5)
+  (let 
+    ((n5 (seq m5 (list '+∞-≤ (list)))))
+    (record-case 
+      l5
+      ((-∞-≤) (o5) (list '-∞-≤ (list)))
+      ((\x5B;\x5D;-≤) 
+        (p5 q5 r5)
         (record-case 
-          c
-          ((-∞) () ((-∞-≤) (list)))
-          ((\x5B;_\x5D;) (d) ((((\x5B;\x5D;-≤) (list)) (list)) (((≤-refl) b) d)))
-          ((+∞) () ((+∞-≤) (list))))))))
-
-(define 
-  (\x5B;\x5D;∞-trans)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (lambda 
-            (e)
-            (lambda 
-              (f)
-              (lambda 
-                (g)
-                (let 
-                  ((h (seq g ((+∞-≤) (list)))))
-                  (record-case 
-                    f
-                    ((-∞-≤) (i) ((-∞-≤) (list)))
-                    ((\x5B;\x5D;-≤) 
-                      (j k l)
-                      (record-case 
-                        c
-                        ((\x5B;_\x5D;) 
-                          (m)
-                          (record-case 
-                            d
-                            ((\x5B;_\x5D;) 
-                              (n)
-                              (record-case 
-                                g
-                                ((\x5B;\x5D;-≤) 
-                                  (o p q)
-                                  (record-case 
-                                    e
-                                    ((\x5B;_\x5D;) 
-                                      (r)
-                                      ((((\x5B;\x5D;-≤) (list)) (list)) (((((((≤-trans) b) m) n) r) l) q)))
-                                    (else h)))
-                                ((+∞-≤) (s) ((+∞-≤) (list)))))
-                            (else h)))
-                        (else h)))
-                    (else h)))))))))))
+          i5
+          ((\x5B;_\x5D;) 
+            (s5)
+            (record-case 
+              j5
+              ((\x5B;_\x5D;) 
+                (t5)
+                (record-case 
+                  m5
+                  ((\x5B;\x5D;-≤) 
+                    (u5 v5 w5)
+                    (record-case 
+                      k5
+                      ((\x5B;_\x5D;) 
+                        (x5)
+                        (list '\x5B;\x5D;-≤ (list)
+(list)
+((((((z≤-trans h5) s5) t5) x5) r5) w5)))
+                      (else n5)))
+                  ((+∞-≤) (y5) (list '+∞-≤ (list)))))
+              (else n5)))
+          (else n5)))
+      (else n5))))
 
 (define (\x5B;\x5D;∞-antisym) (list))
 
 (define 
-  (Ord-\x5B;\x5D;∞)
-  (lambda 
-    (a)
+  (Ord-\x5B;\x5D;∞ z5 a6
+b6)
+  (list 
+    'Ord.constructor
+    (list)
+    (lambda (c6) (\x5B;\x5D;∞-refl (list) a6
+c6))
     (lambda 
-      (b)
+      (d6)
       (lambda 
-        (c)
-        (((((Ord.constructor) (list)) (lambda (d) ((((\x5B;\x5D;∞-refl) (list)) b) d))) 
-           (lambda (e) (lambda (f) (lambda (g) ((((((\x5B;\x5D;∞-trans) (list)) b) e) f) g))))) 
-          (list))))))
+        (e6)
+        (lambda (f6) (lambda (g6) (lambda (h6) (\x5B;\x5D;∞-trans (list) a6
+d6
+e6
+f6
+g6
+h6))))))
+    (list)))
 
-(define (-∞-≤-I) (lambda (a) (lambda (b) ((-∞-≤) (list)))))
+(define (-∞-≤-I i6 j6) (list '-∞-≤ (list)))
 
-(define (+∞-≤-I) (lambda (a) (lambda (b) ((+∞-≤) (list)))))
+(define (+∞-≤-I k6 l6) (list '+∞-≤ (list)))
+
+(define (\x5B;\x5D;-≤-I m6 n6
+o6
+p6) (list '\x5B;\x5D;-≤ (list)
+(list)
+p6))
 
 (define 
-  (\x5B;\x5D;-≤-I)
-  (lambda (a) (lambda (b) (lambda (c) (lambda (d) ((((\x5B;\x5D;-≤) (list)) (list)) d))))))
-
-(define (leaf) (lambda (a) (list 'leaf a)))
-
-(define (node) (lambda (a) (lambda (b) (lambda (c) (list 'node a
-b
-c)))))
-
-(define (testBST) ((((node) 3) ((leaf) ((-∞-≤) (list)))) ((leaf) ((+∞-≤) (list)))))
-
-(define (here) (lambda (a) (lambda (b) (lambda (c) (lambda (d) (list 'here a
-b
-c
-d))))))
-
-(define (left) (lambda (a) (lambda (b) (lambda (c) (lambda (d) (list 'left a
-b
-c
-d))))))
-
-(define (right) (lambda (a) (lambda (b) (lambda (c) (lambda (d) (list 'right a
-b
-c
-d))))))
+  (testBST)
+  (list 'node 3
+(list 'leaf (list '-∞-≤ (list)))
+(list 'leaf (list '+∞-≤ (list)))))
 
 (define 
-  (lookup)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (lambda 
-            (e)
-            (lambda 
-              (f)
-              (record-case 
-                f
-                ((leaf) (g) (nothing))
-                ((node) 
-                  (h i j)
-                  (let 
-                    ((k ((((tri) b) e) h)))
-                    (record-case 
-                      k
-                      ((less) 
-                        (l m n)
-                        (((((mapMaybe) (list)) (list)) ((((left) (list)) (list)) (list))) 
-                          (((((((lookup) (list)) b) (list)) (list)) e) i)))
-                      ((equal) (o p q) ((just) (((((here) (list)) (list)) (list)) (list))))
-                      ((greater) 
-                        (r s t)
-                        (((((mapMaybe) (list)) (list)) ((((right) (list)) (list)) (list))) 
-                          (((((((lookup) (list)) b) (list)) (list)) e) j))))))))))))))
-
-(define 
-  (insert)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (lambda 
-            (e)
-            (lambda 
-              (f)
-              (lambda 
-                (g)
-                (lambda 
-                  (h)
-                  (record-case 
-                    f
-                    ((leaf) (i) ((((node) e) ((leaf) g)) ((leaf) h)))
-                    ((node) 
-                      (j k l)
-                      (let 
-                        ((m ((((tri) b) e) j)))
-                        (record-case 
-                          m
-                          ((less) 
-                            (n o p)
-                            ((((node) j) 
-                               (((((((((insert) (list)) b) (list)) (list)) e) k) g) 
-                                 ((((\x5B;\x5D;-≤) (list)) (list)) p))) 
-                              l))
-                          ((equal) (q r s) f)
-                          ((greater) 
-                            (t u v)
-                            ((((node) j) k) 
-                              (((((((((insert) (list)) b) (list)) (list)) e) l) 
-                                 ((((\x5B;\x5D;-≤) (list)) (list)) v)) 
-                                h))))))))))))))))
-
-(define (testLookup) (((((((lookup) (list)) (TDO-Nat)) (list)) (list)) 3) (testBST)))
-
-(define (testInsert) (((((((((insert) (list)) (TDO-Nat)) (list)) (list)) 4) (testBST)) ((-∞-≤) (list))) ((+∞-≤) (list))))
-
-(define 
-  (fromList)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
+  (lookup q6 r6
+s6
+t6
+u6
+v6)
+  (record-case 
+    v6
+    ((leaf) (w6) (list 'nothing))
+    ((node) 
+      (x6 y6 z6)
+      (let 
+        ((a7 (((tri r6) u6) x6)))
         (record-case 
-          c
-          ((\x5B;\x5D;) () ((leaf) ((-∞-≤) (list))))
-          ((_∷_) 
-            (d e)
-            (((((((((insert) (list)) b) (list)) (list)) d) ((((fromList) (list)) b) e)) ((-∞-≤) (list))) ((+∞-≤) (list)))))))))
-
-(define (testFromList) ((((fromList) (list)) (TDO-Nat)) (((_∷_) 1) (((_∷_) 2) (((_∷_) 3) (\x5B;\x5D;))))))
-
-(define 
-  (_++_)
-  (lambda 
-    (a)
-    (lambda (b) (lambda (c) (record-case b ((\x5B;\x5D;) () c)
-((_∷_) (d e) (((_∷_) d) ((((_++_) (list)) e) c))))))))
-
-(define 
-  (flatten)
-  (lambda 
-    (a)
-    (lambda 
-      (b)
-      (lambda 
-        (c)
-        (lambda 
-          (d)
-          (lambda 
-            (e)
-            (record-case 
-              e
-              ((leaf) (f) (\x5B;\x5D;))
-              ((node) 
-                (g h i)
-                ((((_++_) (list)) ((((((flatten) (list)) (list)) (list)) (list)) h)) 
-                  (((_∷_) g) ((((((flatten) (list)) (list)) (list)) (list)) i)))))))))))
-
-(define (testFlatten) ((((((flatten) (list)) (list)) (list)) (list)) (testInsert)))
+          a7
+          ((less) 
+            (b7 c7 d7)
+            (mapMaybe 
+              (list)
+              (list)
+              (lambda (e7) (list 'left (list)
+(list)
+(list)
+e7))
+              (lookup (list) r6
+(list)
+(list)
+u6
+y6)))
+          ((equal) (f7 g7 h7) (list 'just (list 'here (list)
+(list)
+(list)
+(list))))
+          ((greater) 
+            (i7 j7 k7)
+            (mapMaybe 
+              (list)
+              (list)
+              (lambda (l7) (list 'right (list)
+(list)
+(list)
+l7))
+              (lookup (list) r6
+(list)
+(list)
+u6
+z6))))))))
 
 (define 
-  (sort)
-  (lambda (a) (lambda (b) (lambda (c) ((((((flatten) (list)) (list)) (list)) (list)) ((((fromList) (list)) b) c))))))
+  (insert m7 n7
+o7
+p7
+q7
+r7
+s7
+t7)
+  (record-case 
+    r7
+    ((leaf) (u7) (list 'node q7
+(list 'leaf s7)
+(list 'leaf t7)))
+    ((node) 
+      (v7 w7 x7)
+      (let 
+        ((y7 (((tri n7) q7) v7)))
+        (record-case 
+          y7
+          ((less) 
+            (z7 a8 b8)
+            (list 
+              'node
+              v7
+              (insert (list) n7
+(list)
+(list)
+q7
+w7
+s7
+(list '\x5B;\x5D;-≤ (list)
+(list)
+b8))
+              x7))
+          ((equal) (c8 d8 e8) r7)
+          ((greater) 
+            (f8 g8 h8)
+            (list 
+              'node
+              v7
+              w7
+              (insert (list) n7
+(list)
+(list)
+q7
+x7
+(list '\x5B;\x5D;-≤ (list)
+(list)
+h8)
+t7))))))))
+
+(define (testLookup) (lookup (list) (TDO-Nat)
+(list)
+(list)
+3
+(testBST)))
+
+(define 
+  (testInsert)
+  (insert (list) (TDO-Nat)
+(list)
+(list)
+4
+(testBST)
+(list '-∞-≤ (list))
+(list '+∞-≤ (list))))
+
+(define 
+  (fromList i8 j8
+k8)
+  (record-case 
+    k8
+    ((\x5B;\x5D;) () (list 'leaf (list '-∞-≤ (list))))
+    ((_∷_) 
+      (l8 m8)
+      (insert 
+        (list)
+        j8
+        (list)
+        (list)
+        l8
+        (fromList (list) j8
+m8)
+        (list '-∞-≤ (list))
+        (list '+∞-≤ (list))))))
+
+(define 
+  (testFromList)
+  (fromList (list) (TDO-Nat)
+(list '_∷_ 1
+(list '_∷_ 2
+(list '_∷_ 3
+(list '\x5B;\x5D;))))))
+
+(define 
+  (_++_ n8 o8
+p8)
+  (record-case o8 ((\x5B;\x5D;) () p8)
+((_∷_) (q8 r8) (list '_∷_ q8
+(_++_ (list) r8
+p8)))))
+
+(define 
+  (flatten s8 t8
+u8
+v8
+w8)
+  (record-case 
+    w8
+    ((leaf) (x8) (list '\x5B;\x5D;))
+    ((node) 
+      (y8 z8 a9)
+      (_++_ 
+        (list)
+        (flatten (list) (list)
+(list)
+(list)
+z8)
+        (list '_∷_ y8
+(flatten (list) (list)
+(list)
+(list)
+a9))))))
+
+(define (testFlatten) (flatten (list) (list)
+(list)
+(list)
+(testInsert)))
+
+(define (sort b9 c9
+d9) (flatten (list) (list)
+(list)
+(list)
+(fromList (list) c9
+d9)))
 
 (define 
   (test1)
-  ((((sort) (list)) (TDO-Nat)) 
-    (((_∷_) 5) (((_∷_) 3) (((_∷_) 9) (((_∷_) 1) (((_∷_) 2) (((_∷_) 10) (((_∷_) 7) (((_∷_) 4) (((_∷_) 8) (((_∷_) 6) (\x5B;\x5D;)))))))))))))
-
-(define 
-  (Ord.constructor)
-  (lambda (a) (lambda (b) (lambda (c) (lambda (d) (list 'Ord.constructor a
-b
-c
-d))))))
-
-(define (TDO.constructor) (lambda (a) (lambda (b) (list 'TDO.constructor a
-b))))
+  (sort 
+    (list)
+    (TDO-Nat)
+    (list 
+      '_∷_
+      5
+      (list 
+        '_∷_
+        3
+        (list 
+          '_∷_
+          9
+          (list 
+            '_∷_
+            1
+            (list 
+              '_∷_
+              2
+              (list 
+                '_∷_
+                10
+                (list '_∷_ 7
+(list '_∷_ 4
+(list '_∷_ 8
+(list '_∷_ 6
+(list '\x5B;\x5D;)))))))))))))

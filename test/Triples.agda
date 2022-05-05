@@ -10,13 +10,16 @@ data List (A : Set) : Set where
 
 infixr 5 _::_
 
+if_then_else_ : Bool → A → A → A
+if true  then x else y = x
+if false then x else y = y
+
+id : A → A
+id x = x
+
 filter : (A → Bool) → List A → List A
 filter p [] = []
-filter p (x :: xs) with p x
-... | true  = x :: filter p xs
-... | false = filter p xs
--- ^ I'm using `with` instead of `if_then_else_` so that this test
---   case also works with strict evaluation.
+filter p (x :: xs) = (if p x then (x ::_) else id) (filter p xs)
 
 _++_ : List A → List A → List A
 []        ++ ys = ys
@@ -35,17 +38,16 @@ range x y = go (suc y - x) x
 
 record Triple : Set where
   constructor triple
-  field
-    fst snd trd : Nat
+  field fst snd trd : Nat
 
 alltriples : Nat → List Triple
 alltriples top = range 1 top >>= λ z → range 1 z >>= λ y → range 1 y >>= λ x → (triple x y z) :: []
 
-cartesian : Triple → Bool
-cartesian (triple x y z) = x * x + y * y == z * z
+pythagorean : Triple → Bool
+pythagorean (triple x y z) = x * x + y * y == z * z
 
 triples : Nat → List Triple
-triples top = filter cartesian (alltriples top)
+triples top = filter pythagorean (alltriples top)
 
 sumall : List Triple → Nat
 sumall [] = 0
