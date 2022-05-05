@@ -5,6 +5,7 @@ import Prelude hiding ( null , empty )
 import Agda.Compiler.Common
 import Agda.Compiler.ToTreeless
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
+import Agda.Compiler.Treeless.GuardsToPrims
 
 import Agda.Syntax.Abstract.Name
 import Agda.Syntax.Common
@@ -408,7 +409,7 @@ instance ToScheme TTerm SchForm where
 
 instance ToScheme (TTerm, [TTerm]) SchForm where
   toScheme (w, args) = do
-    w <- liftTCM $ eliminateLiteralPatterns w
+    w <- liftTCM $ eliminateLiteralPatterns (convertGuards w)
     delay <- makeDelay
     args' <- map delay <$> traverse toScheme args
     case w of
@@ -509,7 +510,7 @@ instance ToScheme TAlt SchForm where
       body <- toScheme v
       return $ RSList [RSList [RSAtom c'], RSList (map RSAtom xs), body]
 
-    TAGuard{} -> __IMPOSSIBLE__ -- TODO
+    TAGuard{} -> __IMPOSSIBLE__
     TALit{}   -> __IMPOSSIBLE__
 
 instance ToScheme TError SchForm where
