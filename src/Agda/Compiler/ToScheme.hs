@@ -172,14 +172,14 @@ data SchOptions = SchOptions
 
 data ToSchemeEnv = ToSchemeEnv
   { toSchemeOptions :: SchOptions
-  , toSchemeVars    :: [SchAtom]
+  , toSchemeVars    :: [SchForm]
   }
 
 initToSchemeEnv :: SchOptions -> ToSchemeEnv
 initToSchemeEnv opts = ToSchemeEnv opts []
 
-addVarBinding :: SchAtom -> ToSchemeEnv -> ToSchemeEnv
-addVarBinding x env = env { toSchemeVars = x : toSchemeVars env }
+addBinding :: SchForm -> ToSchemeEnv -> ToSchemeEnv
+addBinding x env = env { toSchemeVars = x : toSchemeVars env }
 
 data ToSchemeState = ToSchemeState
   { toSchemeFresh     :: [SchAtom]                 -- Used for locally bound named variables
@@ -263,13 +263,13 @@ makeForce = do
     LazyEvaluation  -> return schForce
 
 
-getVarName :: Int -> ToSchemeM SchAtom
-getVarName i = reader $ (!! i) . toSchemeVars
+getVar :: Int -> ToSchemeM SchForm
+getVar i = reader $ (!! i) . toSchemeVars
 
 withFreshVar :: (SchAtom -> ToSchemeM a) -> ToSchemeM a
 withFreshVar f = do
   x <- freshSchAtom
-  local (addVarBinding x) $ f x
+  local (addBinding $ RSAtom x) $ f x
 
 withFreshVars :: Int -> ([SchAtom] -> ToSchemeM a) -> ToSchemeM a
 withFreshVars i f
@@ -414,9 +414,9 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
     args' <- map delay <$> traverse toScheme args
     case w of
       TVar i -> do
-        name <- getVarName i
+        x <- getVar i
         force <- makeForce
-        return $ schApps (force $ RSAtom name) args'
+        return $ schApps (force x) args'
       TPrim p -> toScheme (p , args)
       TDef d -> do
         special <- isSpecialDefinition d
@@ -449,7 +449,7 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
       TCase i info v bs -> do
         unless (null args) __IMPOSSIBLE__
         force <- makeForce
-        x <- force . RSAtom <$> getVarName i
+        x <- force <$> getVar i
         special <- isSpecialCase info
         case special of
           Nothing -> do
