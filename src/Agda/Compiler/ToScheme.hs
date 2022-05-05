@@ -115,8 +115,7 @@ schForce x
 schApp :: Int -> SchForm -> [SchForm] -> ToSchemeM SchForm
 schApp n f args = do
   let m = n - length args
-  if | m >= 0    -> do
-        vars <- freshSchAtoms m
+  if | m >= 0    -> withFreshVars m $ \vars -> do
         let args2 = map RSAtom vars
         return $ schLambdas vars $ RSList $ f : args ++ args2
      | otherwise -> do
@@ -124,12 +123,17 @@ schApp n f args = do
          return $ schApps (RSList (f:args1)) args2
 
 schConApp :: Int -> SchAtom -> [SchForm] -> ToSchemeM SchForm
-schConApp i c vs = schApp (i+1) (RSAtom "list") $ RSAtom (schConAtom c) : vs
+schConApp n c args = do
+  let m = n - length args
+  unless (m >= 0) __IMPOSSIBLE__
+  force <- makeForce
+  withFreshVars m $ \vars -> do
+    let args2 = map (force . RSAtom) vars
+    return $ schLambdas vars $
+      RSList $ RSAtom "list" : RSAtom (schConAtom c) : args ++ args2
 
 schOp :: Int -> Text -> [SchForm] -> ToSchemeM SchForm
-schOp n op args = do
-  force <- makeForce
-  schApp n (RSAtom op) $ map force args
+schOp n op args = schApp n (RSAtom op) args
 
 schPrimOp :: TPrim -> [SchForm] -> ToSchemeM SchForm
 schPrimOp p args = case p of
@@ -242,39 +246,47 @@ freshSchAtom = do
         setNameUsed x
         return x
 
-freshSchAtoms :: Int -> ToSchemeM [SchAtom]
-freshSchAtoms n = replicateM n freshSchAtom
-
 getEvaluationStrategy :: ToSchemeM EvaluationStrategy
 getEvaluationStrategy = reader $ schEvaluation . toSchemeOptions
 
 makeDelay :: ToSchemeM (SchForm -> SchForm)
-makeDelay = do
-  strat <- getEvaluationStrategy
-  case strat of
-    EagerEvaluation -> return id
-    LazyEvaluation  -> return schDelay
+makeDelay = delayIfLazy <$> getEvaluationStrategy
 
 makeForce :: ToSchemeM (SchForm -> SchForm)
-makeForce = do
-  strat <- getEvaluationStrategy
-  case strat of
-    EagerEvaluation -> return id
-    LazyEvaluation  -> return schForce
+makeForce = forceIfLazy <$> getEvaluationStrategy
 
+delayIfLazy :: EvaluationStrategy -> SchForm -> SchForm
+delayIfLazy strat = case strat of
+  EagerEvaluation -> id
+  LazyEvaluation  -> schDelay
+
+forceIfLazy :: EvaluationStrategy -> SchForm -> SchForm
+forceIfLazy strat = case strat of
+  EagerEvaluation -> id
+  LazyEvaluation  -> schForce
 
 getVar :: Int -> ToSchemeM SchForm
 getVar i = reader $ (!! i) . toSchemeVars
 
 withFreshVar :: (SchAtom -> ToSchemeM a) -> ToSchemeM a
 withFreshVar f = do
+  strat <- getEvaluationStrategy
+  withFreshVar' strat f
+
+withFreshVar' :: EvaluationStrategy -> (SchAtom -> ToSchemeM a) -> ToSchemeM a
+withFreshVar' strat f = do
   x <- freshSchAtom
-  local (addBinding $ RSAtom x) $ f x
+  local (addBinding $ forceIfLazy strat $ RSAtom x) $ f x
 
 withFreshVars :: Int -> ([SchAtom] -> ToSchemeM a) -> ToSchemeM a
-withFreshVars i f
+withFreshVars i f = do
+  strat <- getEvaluationStrategy
+  withFreshVars' strat i f
+
+withFreshVars' :: EvaluationStrategy -> Int -> ([SchAtom] -> ToSchemeM a) -> ToSchemeM a
+withFreshVars' strat i f
   | i <= 0    = f []
-  | otherwise = withFreshVar $ \x -> withFreshVars (i-1) (f . (x:))
+  | otherwise = withFreshVar' strat $ \x -> withFreshVars' strat (i-1) (f . (x:))
 
 lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, SchAtom))
 lookupSchemeDef n = Map.lookup n <$> gets toSchemeDefs
@@ -405,26 +417,29 @@ instance ToScheme (Int, SchAtom, TTerm) SchForm where
       schDefine f xs <$> toScheme body
 
 instance ToScheme TTerm SchForm where
-  toScheme v = toScheme $ tAppView v
+  toScheme v = do
+    v <- liftTCM $ eliminateLiteralPatterns (convertGuards v)
+    toScheme $ tAppView v
 
 instance ToScheme (TTerm, [TTerm]) SchForm where
+  toScheme (TCoerce w, args) = toScheme (w, args)
+  toScheme (TApp w args1, args2) = toScheme (w, args1 ++ args2)
   toScheme (w, args) = do
-    w <- liftTCM $ eliminateLiteralPatterns (convertGuards w)
     delay <- makeDelay
-    args' <- map delay <$> traverse toScheme args
+    args <- traverse toScheme args
+    let lazyArgs = map delay args
     case w of
       TVar i -> do
         x <- getVar i
-        force <- makeForce
-        return $ schApps (force x) args'
-      TPrim p -> toScheme (p , args)
+        return $ schApps x lazyArgs
+      TPrim p -> schPrimOp p args
       TDef d -> do
         special <- isSpecialDefinition d
         case special of
           Nothing -> do
             (i, d') <- toScheme d
-            schApp i (RSAtom d') args'
-          Just (i, v) -> schApp i v args'
+            schApp i (RSAtom d') lazyArgs
+          Just (i, v) -> schApp i v lazyArgs
       TLam v -> withFreshVar $ \x -> do
         unless (null args) __IMPOSSIBLE__
         body <- toScheme v
@@ -437,8 +452,8 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         case special of
           Nothing -> do
             (i , c') <- toScheme c
-            schConApp i c' args'
-          Just (i, v) -> schApp i v args'
+            schConApp i c' args
+          Just (i, v) -> schApp i v args
       TLet u v -> do
         unless (null args) __IMPOSSIBLE__
         delay <- makeDelay
@@ -448,8 +463,7 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
           return $ schLet [(x,expr)] body
       TCase i info v bs -> do
         unless (null args) __IMPOSSIBLE__
-        force <- makeForce
-        x <- force <$> getVar i
+        x <- getVar i
         special <- isSpecialCase info
         case special of
           Nothing -> do
@@ -480,18 +494,12 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         unless (null args) __IMPOSSIBLE__
         return schUnit
       TErased -> return schUnit
-      TCoerce u -> toScheme (u, args)
       TError err -> toScheme err
-      TApp f args' -> toScheme (f, args'++args)
+      TCoerce{} -> __IMPOSSIBLE__
+      TApp{} -> __IMPOSSIBLE__
 
     where
       isUnreachable v = v == TError TUnreachable
-
-instance ToScheme (TPrim,[TTerm]) SchForm where
-  toScheme (p,args) = do
-    delay <- makeDelay
-    args' <- map delay <$> traverse toScheme args
-    schPrimOp p args'
 
 instance ToScheme Literal SchForm where
   toScheme lit = case lit of
@@ -505,7 +513,7 @@ instance ToScheme Literal SchForm where
 
 instance ToScheme TAlt SchForm where
   toScheme alt = case alt of
-    TACon c nargs v -> withFreshVars nargs $ \xs -> do
+    TACon c nargs v -> withFreshVars' EagerEvaluation nargs $ \xs -> do
       (i, c') <- toScheme c
       body <- toScheme v
       return $ RSList [RSList [RSAtom c'], RSList (map RSAtom xs), body]
