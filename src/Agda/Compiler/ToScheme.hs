@@ -186,9 +186,10 @@ addBinding :: SchForm -> ToSchemeEnv -> ToSchemeEnv
 addBinding x env = env { toSchemeVars = x : toSchemeVars env }
 
 data ToSchemeState = ToSchemeState
-  { toSchemeFresh     :: [SchAtom]                 -- Used for locally bound named variables
-  , toSchemeDefs      :: Map QName (Int, SchAtom)  -- Arity + Scheme name of the defined symbol
-  , toSchemeUsedNames :: Set SchAtom               -- Names that are already in use (both variables and definitions)
+  { toSchemeFresh     :: [SchAtom]    -- Used for locally bound named variables
+  , toSchemeDefs      :: Map QName (Int, [EvaluationStrategy], SchAtom)
+                                      -- Arity + argument strictness + Scheme name of the defined symbol
+  , toSchemeUsedNames :: Set SchAtom  -- Names that are already in use (both variables and definitions)
   }
 
 -- This is an infinite supply of variable names
@@ -288,10 +289,10 @@ withFreshVars' strat i f
   | i <= 0    = f []
   | otherwise = withFreshVar' strat $ \x -> withFreshVars' strat (i-1) (f . (x:))
 
-lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, SchAtom))
+lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, [EvaluationStrategy], SchAtom))
 lookupSchemeDef n = Map.lookup n <$> gets toSchemeDefs
 
-setSchemeDef :: QName -> Int -> SchAtom -> ToSchemeM ()
+setSchemeDef :: QName -> Int -> [EvaluationStrategy] -> SchAtom -> ToSchemeM ()
 setSchemeDef n i a = modify $ \s -> s { toSchemeDefs = Map.insert n (i, a) (toSchemeDefs s) }
 
 newSchemeDef :: QName -> Int -> ToSchemeM SchAtom
@@ -553,3 +554,35 @@ isSpecialCase (CaseInfo lazy (CTData q cty)) = do
     then return (Just BoolCase)
     else return Nothing
 specialCase _ = return Nothing
+
+-- Returns the set of variables that are always evaluated during
+-- evaluation of the term.
+strictVars :: TTerm -> Set Int
+strictVars v = case v of
+  TVar i -> Set.singleton i
+  TPrim{} -> Set.empty
+  TDef{} -> Set.empty
+  TApp w args -> strictVars w -- TODO: look into arguments
+  TLam w -> lower 1 $ strictVars w
+  TLit{} -> Set.empty
+  TCon{} -> Set.empty
+  TLet u w ->
+    let xs1 = strictVars w
+        xs2 = if 0 `Set.member` xs1 then strictVars u else Set.empty
+    in lower 1 xs1 `Set.union` xs2
+  TCase i info def alts ->
+    let xs1 = Set.singleton i
+        xs2 = foldr1 Set.intersection
+          (strictVars def : map usedVarsAlt alts)
+        in xs1 `Set.union` xs2
+  TUnit -> Set.empty
+  TSort -> Set.empty
+  TErased -> Set.empty
+  TCoerce w -> strictVars w
+  TError{} -> Set.empty
+
+  where
+    lower :: Int -> Set Int -> Set Int
+    lower i = Set.filter (>= 0) . Set.map (\n -> n-i)
+    usedVarsAlt (TACon c i v) = lower i $ strictVars v
+    usedVarsAlt _ = Set.empty
