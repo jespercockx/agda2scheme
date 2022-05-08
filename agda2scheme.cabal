@@ -22,6 +22,7 @@ executable agda2scheme
 
     -- Modules included in this executable, other than Main.
     other-modules:    Agda.Compiler.ToScheme
+                      Agda.Compiler.Erase
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

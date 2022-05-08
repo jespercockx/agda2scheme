@@ -3,8 +3,10 @@ module Agda.Compiler.ToScheme where
 import Prelude hiding ( null , empty )
 
 import Agda.Compiler.Common
+import Agda.Compiler.Erase ( runE , erasable , getFunInfo )
 import Agda.Compiler.ToTreeless
 import Agda.Compiler.Treeless.EliminateLiteralPatterns
+import Agda.Compiler.Treeless.Erase
 import Agda.Compiler.Treeless.GuardsToPrims
 
 import Agda.Syntax.Abstract.Name
@@ -23,7 +25,7 @@ import Agda.Utils.List
 import Agda.Utils.Maybe
 import Agda.Utils.Monad
 import Agda.Utils.Null
-import Agda.Utils.Pretty as P
+import qualified Agda.Utils.Pretty as P
 import Agda.Utils.Singleton
 
 import Control.Arrow ( first , second )
@@ -108,32 +110,34 @@ schForce x
   | RSList [RSAtom "delay", y] <- x = y
   | otherwise                       = RSList [RSAtom "force", x]
 
+dropArgs :: [Bool] -> [a] -> [a]
+dropArgs bs xs = map snd $ filter (not . fst) $ zip bs xs
 
--- Apply a function symbol of given arity to a list of arguments,
+-- Apply a function symbol of given arity and erasure info to a list of arguments,
 -- inserting lambdas or applications where needed to match the
 -- symbol's arity.
-schApp :: Int -> SchForm -> [SchForm] -> ToSchemeM SchForm
-schApp n f args = do
+schApp :: Int -> [Bool] -> SchForm -> [SchForm] -> ToSchemeM SchForm
+schApp n bs f args = do
   let m = n - length args
   if | m >= 0    -> withFreshVars m $ \vars -> do
         let args2 = map RSAtom vars
-        return $ schLambdas vars $ RSList $ f : args ++ args2
+        return $ schLambdas vars $ RSList $ f : dropArgs bs (args ++ args2)
      | otherwise -> do
          let (args1,args2) = splitAt n args
-         return $ schApps (RSList (f:args1)) args2
+         return $ schApps (RSList (f : dropArgs bs args1)) args2
 
-schConApp :: Int -> SchAtom -> [SchForm] -> ToSchemeM SchForm
-schConApp n c args = do
+schConApp :: Int -> [Bool] -> SchAtom -> [SchForm] -> ToSchemeM SchForm
+schConApp n bs c args = do
   let m = n - length args
   unless (m >= 0) __IMPOSSIBLE__
   force <- makeForce
   withFreshVars m $ \vars -> do
     let args2 = map (force . RSAtom) vars
     return $ schLambdas vars $
-      RSList $ RSAtom "list" : RSAtom (schConAtom c) : args ++ args2
+      RSList $ RSAtom "list" : RSAtom (schConAtom c) : dropArgs bs (args ++ args2)
 
 schOp :: Int -> Text -> [SchForm] -> ToSchemeM SchForm
-schOp n op args = schApp n (RSAtom op) args
+schOp n op args = schApp n (replicate n False) (RSAtom op) args
 
 schPrimOp :: TPrim -> [SchForm] -> ToSchemeM SchForm
 schPrimOp p args = case p of
@@ -186,9 +190,10 @@ addBinding :: SchForm -> ToSchemeEnv -> ToSchemeEnv
 addBinding x env = env { toSchemeVars = x : toSchemeVars env }
 
 data ToSchemeState = ToSchemeState
-  { toSchemeFresh     :: [SchAtom]                 -- Used for locally bound named variables
-  , toSchemeDefs      :: Map QName (Int, SchAtom)  -- Arity + Scheme name of the defined symbol
-  , toSchemeUsedNames :: Set SchAtom               -- Names that are already in use (both variables and definitions)
+  { toSchemeFresh     :: [SchAtom]    -- Used for locally bound named variables
+  , toSchemeDefs      :: Map QName (Int, [Bool], SchAtom)
+                                      -- Arity + erasure info + Scheme name of the defined symbol
+  , toSchemeUsedNames :: Set SchAtom  -- Names that are already in use (both variables and definitions)
   }
 
 -- This is an infinite supply of variable names
@@ -288,17 +293,17 @@ withFreshVars' strat i f
   | i <= 0    = f []
   | otherwise = withFreshVar' strat $ \x -> withFreshVars' strat (i-1) (f . (x:))
 
-lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, SchAtom))
+lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, [Bool], SchAtom))
 lookupSchemeDef n = Map.lookup n <$> gets toSchemeDefs
 
-setSchemeDef :: QName -> Int -> SchAtom -> ToSchemeM ()
-setSchemeDef n i a = modify $ \s -> s { toSchemeDefs = Map.insert n (i, a) (toSchemeDefs s) }
+setSchemeDef :: QName -> Int -> [Bool] -> SchAtom -> ToSchemeM ()
+setSchemeDef n i bs a = modify $ \s -> s { toSchemeDefs = Map.insert n (i, bs, a) (toSchemeDefs s) }
 
-newSchemeDef :: QName -> Int -> ToSchemeM SchAtom
-newSchemeDef n i = do
+newSchemeDef :: QName -> Int -> [Bool] -> ToSchemeM SchAtom
+newSchemeDef n i bs = do
   unlessM (isNothing <$> lookupSchemeDef n) __IMPOSSIBLE__
   a <- makeSchemeName n
-  setSchemeDef n i a
+  setSchemeDef n i bs a
   setNameUsed a
   return a
 
@@ -337,7 +342,7 @@ isValidSchemeChar x
 -- Creates a valid Scheme name from a (qualified) Agda name.
 -- Precondition: the given name is not already in toSchemeDefs.
 makeSchemeName :: QName -> ToSchemeM SchAtom
-makeSchemeName n = go $ fixName $ prettyShow $ qnameName n
+makeSchemeName n = go $ fixName $ P.prettyShow $ qnameName n
   where
     nextName = ('z':) -- TODO: do something smarter
 
@@ -362,7 +367,7 @@ fourBitsToChar i = "0123456789ABCDEF" !! i
 class ToScheme a b | a -> b where
   toScheme :: a -> ToSchemeM b
 
-instance ToScheme QName (Int, SchAtom) where
+instance ToScheme QName (Int, [Bool], SchAtom) where
   toScheme n = do
     r <- lookupSchemeDef n
     case r of
@@ -370,8 +375,8 @@ instance ToScheme QName (Int, SchAtom) where
       Just a  -> return a
 
 -- We first convert all definitions to treeless and calculate their
--- arity, before doing the actual translation to Scheme.
-defToTreeless :: Definition -> ToSchemeM (Maybe (Int, SchAtom, TTerm))
+-- arity and erasure info, before doing the actual translation to Scheme.
+defToTreeless :: Definition -> ToSchemeM (Maybe (Int, [Bool], SchAtom, TTerm))
 defToTreeless def
   | defNoCompilation def ||
     not (usableModality $ getModality def) = return Nothing
@@ -380,7 +385,7 @@ defToTreeless def
     reportSDoc "toScheme" 5 $ "Compiling definition:" <> prettyTCM f
     case theDef def of
       Axiom{} -> do
-        f' <- newSchemeDef f 0
+        f' <- newSchemeDef f 0 []
         return Nothing
       GeneralizableVar{} -> return Nothing
       d@Function{} | d ^. funInline -> return Nothing
@@ -390,17 +395,26 @@ defToTreeless def
         case maybeCompiled of
           Just body -> do
             let (n, body') = lambdaView body
-            f' <- newSchemeDef f n
-            return $ Just (n, f', body')
+            er <- erasureInfo f
+            case er of
+              Nothing -> return Nothing
+              Just bs -> do
+                reportSDoc "toScheme" 15 $ "Erasure info: " <> text (show bs)
+                unless (length bs >= n) __IMPOSSIBLE__
+                f' <- newSchemeDef f n (take n bs)
+                return $ Just (n, bs, f', body')
           Nothing -> return Nothing
       Primitive{} -> do
-        f' <- newSchemeDef f 0
+        f' <- newSchemeDef f 0 []
         return Nothing -- TODO!
       PrimitiveSort{} -> return Nothing
       Datatype{} -> return Nothing
       Record{} -> return Nothing
       Constructor{ conSrcCon = chead, conArity = nargs } -> do
-        _ <- newSchemeDef (conName chead) nargs
+        er <- erasureInfo (conName chead)
+        whenJust er $ \bs -> do
+          reportSDoc "toScheme" 15 $ "Erasure info: " <> text (show bs)
+          void $ newSchemeDef (conName chead) nargs bs
         return Nothing
       AbstractDefn{} -> __IMPOSSIBLE__
       DataOrRecSig{} -> __IMPOSSIBLE__
@@ -411,10 +425,20 @@ lambdaView v = case v of
   TCoerce w -> lambdaView w
   _         -> (0, v)
 
-instance ToScheme (Int, SchAtom, TTerm) SchForm where
-  toScheme (n, f, body) =
+-- `Just bs` means that the arguments for which the corresponding
+-- position in `bs` is True can be erased
+-- `Nothing` means that the entire function can be erased.
+erasureInfo :: QName -> ToSchemeM (Maybe [Bool])
+erasureInfo f = liftTCM $ runE $ do
+  (bs, b) <- getFunInfo f
+  if erasable b
+    then return Nothing
+    else return (Just $ map erasable bs)
+
+instance ToScheme (Int, [Bool], SchAtom, TTerm) SchForm where
+  toScheme (n, bs, f, body) =
     withFreshVars n $ \xs ->
-      schDefine f xs <$> toScheme body
+      schDefine f (dropArgs bs xs) <$> toScheme body
 
 instance ToScheme TTerm SchForm where
   toScheme v = do
@@ -437,9 +461,9 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         special <- isSpecialDefinition d
         case special of
           Nothing -> do
-            (i, d') <- toScheme d
-            schApp i (RSAtom d') lazyArgs
-          Just (i, v) -> schApp i v lazyArgs
+            (i, bs, d') <- toScheme d
+            schApp i bs (RSAtom d') lazyArgs
+          Just (i, v) -> schApp i (replicate i False) v lazyArgs
       TLam v -> withFreshVar $ \x -> do
         unless (null args) __IMPOSSIBLE__
         body <- toScheme v
@@ -451,9 +475,11 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         special <- isSpecialConstructor c
         case special of
           Nothing -> do
-            (i , c') <- toScheme c
-            schConApp i c' args
-          Just (i, v) -> schApp i v args
+            (i, bs, c') <- toScheme c
+            schConApp i bs c' args
+          Just v -> do
+            unless (null args) __IMPOSSIBLE__
+            return v
       TLet u v -> do
         unless (null args) __IMPOSSIBLE__
         delay <- makeDelay
@@ -495,8 +521,6 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         return schUnit
       TErased -> return schUnit
       TError err -> toScheme err
-      TCoerce{} -> __IMPOSSIBLE__
-      TApp{} -> __IMPOSSIBLE__
 
     where
       isUnreachable v = v == TError TUnreachable
@@ -514,9 +538,9 @@ instance ToScheme Literal SchForm where
 instance ToScheme TAlt SchForm where
   toScheme alt = case alt of
     TACon c nargs v -> withFreshVars' EagerEvaluation nargs $ \xs -> do
-      (i, c') <- toScheme c
+      (i, bs, c') <- toScheme c
       body <- toScheme v
-      return $ RSList [RSList [RSAtom c'], RSList (map RSAtom xs), body]
+      return $ RSList [RSList [RSAtom c'], RSList (dropArgs bs (map RSAtom xs)), body]
 
     TAGuard{} -> __IMPOSSIBLE__
     TALit{}   -> __IMPOSSIBLE__
@@ -526,14 +550,14 @@ instance ToScheme TError SchForm where
     TUnreachable -> return $ schError "Panic!"
     TMeta s      -> return $ schError $ "encountered unsolved meta: " <> T.pack s
 
-isSpecialConstructor :: QName -> ToSchemeM (Maybe (Int, SchForm))
+isSpecialConstructor :: QName -> ToSchemeM (Maybe SchForm)
 isSpecialConstructor c = do
   let getConName (Just (Con c _ _)) = Just (conName c)
       getConName _ = Nothing
   mTrue <- getConName <$> getBuiltin' builtinTrue
   mFalse <- getConName <$> getBuiltin' builtinFalse
-  if | Just c == mTrue  -> return $ Just (0, RSAtom "#t")
-     | Just c == mFalse -> return $ Just (0, RSAtom "#f")
+  if | Just c == mTrue  -> return $ Just (RSAtom "#t")
+     | Just c == mFalse -> return $ Just (RSAtom "#f")
      | otherwise        -> return Nothing
 
 isSpecialDefinition :: QName -> ToSchemeM (Maybe (Int, SchForm))

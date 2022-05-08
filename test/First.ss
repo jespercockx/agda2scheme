@@ -9,15 +9,13 @@
 (define (not b) (record-case (force b) ((true) () (list 'false))
 ((false) () (list 'true))))
 
-(define (ite c d
-e
+(define (ite d e
 f) (record-case (force d) ((true) () (force e))
 ((false) () (force f))))
 
 (define (loop) (loop))
 
-(define (test1) (ite (delay (list)) (delay (list 'false))
-(delay (loop))
+(define (test1) (ite (delay (list 'false)) (delay (loop))
 (delay (list 'true))))
 
 (define (one) (list 'suc (list 'zero)))
@@ -47,57 +45,34 @@ f) (record-case (force d) ((true) () (force e))
 
 (define (test2) (consume (delay (pow2 (delay (twice (delay (twice (delay (twice (delay (three))))))))))))
 
-(define (head r s
-t) (record-case (force t) ((con) (u v w) v)))
+(define (head t) (record-case (force t) ((con) (v w) v)))
 
-(define (tail x y
-z) (record-case (force z) ((con) (a1 b1 c1) c1)))
+(define (tail z) (record-case (force z) ((con) (b1 c1) c1)))
 
 (define 
-  (map d1 e1
-f1
-g1
-h1)
+  (map g1 h1)
   (record-case 
     (force h1)
     ((nil) () (force h1))
-    ((con) 
-      (i1 j1 k1)
-      (list 
-        'con
-        i1
-        ((force g1) (delay j1))
-        (map (delay (list)) (delay (list))
-(delay (list))
-g1
-(delay k1))))))
+    ((con) (j1 k1) (list 'con ((force g1) (delay j1))
+(map g1 (delay k1))))))
 
 (define 
   (test3)
   (head 
-    (delay (list))
-    (delay (list))
     (delay 
       (tail 
-        (delay (list))
-        (delay (list))
         (delay 
           (map 
-            (delay (list))
-            (delay (list))
-            (delay (list))
             (delay (lambda (l1) (list 'suc (force l1))))
             (delay 
               (list 
                 'con
-                (list 'suc (list 'suc (list 'zero)))
                 (list 'zero)
                 (list 
                   'con
                   (list 'suc (list 'zero))
-                  (list 'suc (list 'zero))
-                  (list 'con (list 'zero)
-(list 'suc (list 'suc (list 'zero)))
+                  (list 'con (list 'suc (list 'suc (list 'zero)))
 (list 'nil)))))))))))
 
 (define (z123\x27;\x23;\x7C;H\x5C;x65llo) (list 'zero))

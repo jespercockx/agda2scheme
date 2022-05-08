@@ -54,7 +54,7 @@ test2 = consume (pow2 (twice (twice (twice three))))
 
 data Vec (@0 A : Set) : @0 Nat → Set where
   nil : Vec A zero
-  con : {n : Nat} → A → Vec A n → Vec A (suc n)
+  con : {@0 n : Nat} → A → Vec A n → Vec A (suc n)
 
 head : {@0 A : Set} {@0 n : Nat} → Vec A (suc n) → A
 head (con x xs) = x
