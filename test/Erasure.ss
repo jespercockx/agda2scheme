@@ -7,7 +7,7 @@
 (define (not a) (if a #f
 #t))
 
-(define (f b) (record-case b ((c) (e) (list 'c (not e)))))
+(define (f b) (let ((e (list-ref b 0))) (list (not e))))
 
 (define (map j k) (record-case k ((\x5B;\x5D;) () k)
 ((_∷_) (m n) (list '_∷_ (j m)
@@ -15,6 +15,6 @@
 
 (define 
   (test1)
-  (map (lambda (o) (f o)) (list '_∷_ (list 'c #t)
-(list '_∷_ (list 'c #f)
+  (map (lambda (o) (f o)) (list '_∷_ (list #t)
+(list '_∷_ (list #f)
 (list '\x5B;\x5D;)))))

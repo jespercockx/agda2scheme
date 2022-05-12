@@ -100,6 +100,9 @@ schCase x cases maybeFallback = RSList $
 schUnit :: SchForm
 schUnit = RSList [RSAtom "list"]
 
+schInt :: Int -> SchForm
+schInt i = RSAtom $ T.pack $ show i
+
 schDelay :: SchForm -> SchForm
 schDelay x
   | RSList [RSAtom "force", y] <- x = y
@@ -109,6 +112,9 @@ schForce :: SchForm -> SchForm
 schForce x
   | RSList [RSAtom "delay", y] <- x = y
   | otherwise                       = RSList [RSAtom "force", x]
+
+schLookupList :: SchForm -> SchForm -> SchForm
+schLookupList xs k = RSList [RSAtom "list-ref", xs, k]
 
 dropArgs :: [Bool] -> [a] -> [a]
 dropArgs bs xs = map snd $ filter (not . fst) $ zip bs xs
@@ -126,15 +132,16 @@ schApp n bs f args = do
          let (args1,args2) = splitAt n args
          return $ schApps (RSList (f : dropArgs bs args1)) args2
 
-schConApp :: Int -> [Bool] -> SchAtom -> [SchForm] -> ToSchemeM SchForm
-schConApp n bs c args = do
-  let m = n - length args
+schConApp :: SchAtom -> Int -> Bool -> [Bool] -> [SchForm] -> ToSchemeM SchForm
+schConApp c n b bs args = do
+  let tag = if b then id else (RSAtom (schConAtom c) :)
+      m = n - length args
   unless (m >= 0) __IMPOSSIBLE__
   force <- makeForce
   withFreshVars m $ \vars -> do
     let args2 = map (force . RSAtom) vars
     return $ schLambdas vars $
-      RSList $ RSAtom "list" : RSAtom (schConAtom c) : dropArgs bs (args ++ args2)
+      RSList $ RSAtom "list" : tag (dropArgs bs (args ++ args2))
 
 schOp :: Int -> Text -> [SchForm] -> ToSchemeM SchForm
 schOp n op args = schApp n (replicate n False) (RSAtom op) args
@@ -189,11 +196,15 @@ initToSchemeEnv opts = ToSchemeEnv opts []
 addBinding :: SchForm -> ToSchemeEnv -> ToSchemeEnv
 addBinding x env = env { toSchemeVars = x : toSchemeVars env }
 
+data ToSchemeDef = ToSchemeDef SchAtom Int [Bool]       -- Scheme name + arity + erased args
+
+data ToSchemeCon = ToSchemeCon SchAtom Int Bool [Bool]  -- Scheme name + arity + erased tag + erased args
+
 data ToSchemeState = ToSchemeState
-  { toSchemeFresh     :: [SchAtom]    -- Used for locally bound named variables
-  , toSchemeDefs      :: Map QName (Int, [Bool], SchAtom)
-                                      -- Arity + erasure info + Scheme name of the defined symbol
-  , toSchemeUsedNames :: Set SchAtom  -- Names that are already in use (both variables and definitions)
+  { toSchemeFresh     :: [SchAtom]                 -- Used for locally bound named variables
+  , toSchemeDefs      :: Map QName ToSchemeDef
+  , toSchemeCons      :: Map QName ToSchemeCon
+  , toSchemeUsedNames :: Set SchAtom               -- Names that are already in use (both variables and definitions)
   }
 
 -- This is an infinite supply of variable names
@@ -230,6 +241,7 @@ initToSchemeState :: ToSchemeState
 initToSchemeState = ToSchemeState
   { toSchemeFresh     = freshVars
   , toSchemeDefs      = Map.empty
+  , toSchemeCons      = Map.empty
   , toSchemeUsedNames = reservedNames
   }
 
@@ -293,17 +305,39 @@ withFreshVars' strat i f
   | i <= 0    = f []
   | otherwise = withFreshVar' strat $ \x -> withFreshVars' strat (i-1) (f . (x:))
 
-lookupSchemeDef :: QName -> ToSchemeM (Maybe (Int, [Bool], SchAtom))
-lookupSchemeDef n = Map.lookup n <$> gets toSchemeDefs
+lookupSchemeDef :: QName -> ToSchemeM ToSchemeDef
+lookupSchemeDef n = do
+  r <- Map.lookup n <$> gets toSchemeDefs
+  case r of
+    Nothing -> fail $ "unbound name " <> show (P.pretty n)
+    Just a  -> return a
 
-setSchemeDef :: QName -> Int -> [Bool] -> SchAtom -> ToSchemeM ()
-setSchemeDef n i bs a = modify $ \s -> s { toSchemeDefs = Map.insert n (i, bs, a) (toSchemeDefs s) }
+lookupSchemeCon :: QName -> ToSchemeM ToSchemeCon
+lookupSchemeCon n = do
+  r <- Map.lookup n <$> gets toSchemeCons
+  case r of
+    Nothing -> fail $ "unbound name " <> show (P.pretty n)
+    Just a  -> return a
+
+setSchemeDef :: QName -> ToSchemeDef -> ToSchemeM ()
+setSchemeDef n def = do
+  modify $ \s -> s { toSchemeDefs = Map.insert n def (toSchemeDefs s) }
+
+setSchemeCon :: QName -> ToSchemeCon -> ToSchemeM ()
+setSchemeCon n con = do
+  modify $ \s -> s { toSchemeCons = Map.insert n con (toSchemeCons s) }
 
 newSchemeDef :: QName -> Int -> [Bool] -> ToSchemeM SchAtom
 newSchemeDef n i bs = do
-  unlessM (isNothing <$> lookupSchemeDef n) __IMPOSSIBLE__
   a <- makeSchemeName n
-  setSchemeDef n i bs a
+  setSchemeDef n (ToSchemeDef a i bs)
+  setNameUsed a
+  return a
+
+newSchemeCon :: QName -> Int -> Bool -> [Bool] -> ToSchemeM SchAtom
+newSchemeCon n i b bs = do
+  a <- makeSchemeName n
+  setSchemeCon n (ToSchemeCon a i b bs)
   setNameUsed a
   return a
 
@@ -367,13 +401,6 @@ fourBitsToChar i = "0123456789ABCDEF" !! i
 class ToScheme a b | a -> b where
   toScheme :: a -> ToSchemeM b
 
-instance ToScheme QName (Int, [Bool], SchAtom) where
-  toScheme n = do
-    r <- lookupSchemeDef n
-    case r of
-      Nothing -> fail $ "unbound name " <> show (P.pretty n)
-      Just a  -> return a
-
 -- We first convert all definitions to treeless and calculate their
 -- arity and erasure info, before doing the actual translation to Scheme.
 defToTreeless :: Definition -> ToSchemeM (Maybe (Int, [Bool], SchAtom, TTerm))
@@ -408,16 +435,29 @@ defToTreeless def
         f' <- newSchemeDef f 0 []
         return Nothing -- TODO!
       PrimitiveSort{} -> return Nothing
-      Datatype{} -> return Nothing
-      Record{} -> return Nothing
-      Constructor{ conSrcCon = chead, conArity = nargs } -> do
-        er <- erasureInfo (conName chead)
-        whenJust er $ \bs -> do
-          reportSDoc "toScheme" 15 $ "Erasure info: " <> text (show bs)
-          void $ newSchemeDef (conName chead) nargs bs
+      Datatype{ dataCons = cs } -> do
+        let eraseTag = length cs == 1
+        forM_ cs $ \c -> do
+          cdef <- theDef <$> getConstInfo c
+          case cdef of
+            Constructor{ conSrcCon = chead, conArity = nargs } ->
+              processCon chead nargs eraseTag
+            _ -> __IMPOSSIBLE__
         return Nothing
+      Record{ recConHead = chead, recFields = fs } -> do
+        processCon chead (length fs) True
+        return Nothing
+      Constructor{} -> return Nothing
       AbstractDefn{} -> __IMPOSSIBLE__
       DataOrRecSig{} -> __IMPOSSIBLE__
+  where
+    processCon :: ConHead -> Int -> Bool -> ToSchemeM ()
+    processCon chead nargs b = do
+      er <- erasureInfo (conName chead)
+      whenJust er $ \bs -> do
+        reportSDoc "toScheme" 15 $ "Erasure info: " <> text (show bs)
+        void $ newSchemeCon (conName chead) nargs b bs
+
 
 lambdaView :: TTerm -> (Int, TTerm)
 lambdaView v = case v of
@@ -461,7 +501,7 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         special <- isSpecialDefinition d
         case special of
           Nothing -> do
-            (i, bs, d') <- toScheme d
+            ToSchemeDef d' i bs <- lookupSchemeDef d
             schApp i bs (RSAtom d') lazyArgs
           Just (i, v) -> schApp i (replicate i False) v lazyArgs
       TLam v -> withFreshVar $ \x -> do
@@ -475,8 +515,8 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         special <- isSpecialConstructor c
         case special of
           Nothing -> do
-            (i, bs, c') <- toScheme c
-            schConApp i bs c' args
+            ToSchemeCon c' i b bs <- lookupSchemeCon c
+            schConApp c' i b bs args
           Just v -> do
             unless (null args) __IMPOSSIBLE__
             return v
@@ -492,6 +532,13 @@ instance ToScheme (TTerm, [TTerm]) SchForm where
         x <- getVar i
         special <- isSpecialCase info
         case special of
+          Nothing | [TACon c nargs v] <- bs -> do
+            withFreshVars' EagerEvaluation nargs $ \xs -> do
+              ToSchemeCon c' i b bs <- lookupSchemeCon c
+              let mkProj i = schLookupList x (schInt $ if b then i else i+1)
+                  binds    = zip (dropArgs bs xs) (map mkProj [0..])
+              body <- toScheme v
+              return $ schLet binds body
           Nothing -> do
             cases <- traverse toScheme bs
             fallback <- if isUnreachable v
@@ -538,7 +585,8 @@ instance ToScheme Literal SchForm where
 instance ToScheme TAlt SchForm where
   toScheme alt = case alt of
     TACon c nargs v -> withFreshVars' EagerEvaluation nargs $ \xs -> do
-      (i, bs, c') <- toScheme c
+      ToSchemeCon c' i b bs <- lookupSchemeCon c
+      when b __IMPOSSIBLE__
       body <- toScheme v
       return $ RSList [RSList [RSAtom c'], RSList (dropArgs bs (map RSAtom xs)), body]
 

@@ -45,9 +45,9 @@ f) (record-case (force d) ((true) () (force e))
 
 (define (test2) (consume (delay (pow2 (delay (twice (delay (twice (delay (twice (delay (three))))))))))))
 
-(define (head t) (record-case (force t) ((con) (v w) v)))
+(define (head t) (let ((v (list-ref (force t) 1)) (w (list-ref (force t) 2))) v))
 
-(define (tail z) (record-case (force z) ((con) (b1 c1) c1)))
+(define (tail z) (let ((b1 (list-ref (force z) 1)) (c1 (list-ref (force z) 2))) c1))
 
 (define 
   (map g1 h1)

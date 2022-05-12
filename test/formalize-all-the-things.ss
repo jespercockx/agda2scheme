@@ -11,9 +11,9 @@
 
 (define (testMapMaybe) (mapMaybe (lambda (h) (+ 1 h)) (list 'just 5)))
 
-(define (fst i) (record-case i ((_\x2C;_) (j k) j)))
+(define (fst i) (let ((j (list-ref i 0)) (k (list-ref i 1))) j))
 
-(define (snd l) (record-case l ((_\x2C;_) (m n) n)))
+(define (snd l) (let ((m (list-ref l 0)) (n (list-ref l 1))) n))
 
 (define (mapInl r s) (record-case s ((inl) (t) (list 'inl (r t)))
 ((inr) (u) s)))
@@ -31,32 +31,28 @@
   (record-case 
     n1
     ((≤-zero) () (list '≤-zero))
-    ((≤-suc) (s1) (record-case o1 ((≤-suc) (v1) (list '≤-suc (≤-trans s1 v1)))))))
+    ((≤-suc) (s1) (let ((v1 (list-ref o1 1))) (list '≤-suc (≤-trans s1 v1))))))
 
 (define (≤-dec w1) (if (= 0 w1) (list '≤-zero)
 (let ((z1 (- w1 1))) (list '≤-suc (≤-dec z1)))))
 
-(define (z≤-refl a2) (record-case a2 ((Ord.constructor) (c2 d2) c2)))
+(define (z≤-refl a2) (let ((c2 (list-ref a2 0)) (d2 (list-ref a2 1))) c2))
 
-(define (z≤-trans f2) (record-case f2 ((Ord.constructor) (h2 i2) i2)))
+(define (z≤-trans f2) (let ((h2 (list-ref f2 0)) (i2 (list-ref f2 1))) i2))
 
 (define 
   (Ord-Nat)
   (list 
-    'Ord.constructor
     (lambda (k2) (≤-refl k2))
     (lambda (l2) (lambda (m2) (lambda (n2) (lambda (o2) (lambda (p2) (≤-trans o2 p2))))))))
 
 (define 
   (Ord-⊤)
-  (list 
-    'Ord.constructor
-    (lambda (q2) (list))
-    (lambda (r2) (lambda (s2) (lambda (t2) (lambda (u2) (lambda (v2) (list))))))))
+  (list (lambda (q2) (list)) (lambda (r2) (lambda (s2) (lambda (t2) (lambda (u2) (lambda (v2) (list))))))))
 
-(define (Ord-A w2) (record-case w2 ((TDO.constructor) (x2 y2) x2)))
+(define (Ord-A w2) (let ((x2 (list-ref w2 0)) (y2 (list-ref w2 1))) x2))
 
-(define (tri z2) (record-case z2 ((TDO.constructor) (a3 b3) b3)))
+(define (tri z2) (let ((a3 (list-ref z2 0)) (b3 (list-ref z2 1))) b3))
 
 (define 
   (triNat c3 d3)
@@ -81,8 +77,7 @@
 
 (define (testTriNat) (triNat 3 5))
 
-(define (TDO-Nat) (list 'TDO.constructor (Ord-Nat)
-(lambda (q3) (lambda (r3) (triNat q3 r3)))))
+(define (TDO-Nat) (list (Ord-Nat) (lambda (q3) (lambda (r3) (triNat q3 r3)))))
 
 (define 
   (\x5B;\x5D;∞-refl t3 u3)
@@ -105,33 +100,23 @@ c4)
       ((-∞-≤) () (list '-∞-≤))
       ((\x5B;\x5D;-≤) 
         (h4)
-        (record-case 
-          y3
-          ((\x5B;_\x5D;) 
-            (i4)
+        (let 
+          ((i4 (list-ref y3 1)))
+          (let 
+            ((j4 (list-ref z3 1)))
             (record-case 
-              z3
-              ((\x5B;_\x5D;) 
-                (j4)
-                (record-case 
-                  c4
-                  ((\x5B;\x5D;-≤) 
-                    (m4)
-                    (record-case 
-                      a4
-                      ((\x5B;_\x5D;) 
-                        (n4)
-                        (list '\x5B;\x5D;-≤ ((((((z≤-trans x3) i4) j4) n4) h4) m4)))
-                      (else d4)))
-                  ((+∞-≤) () (list '+∞-≤))))
-              (else d4)))
-          (else d4)))
+              c4
+              ((\x5B;\x5D;-≤) 
+                (m4)
+                (let 
+                  ((n4 (list-ref a4 1)))
+                  (list '\x5B;\x5D;-≤ ((((((z≤-trans x3) i4) j4) n4) h4) m4))))
+              ((+∞-≤) () (list '+∞-≤))))))
       (else d4))))
 
 (define 
   (Ord-\x5B;\x5D;∞ q4)
   (list 
-    'Ord.constructor
     (lambda (s4) (\x5B;\x5D;∞-refl q4 s4))
     (lambda 
       (t4)

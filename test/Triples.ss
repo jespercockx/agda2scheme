@@ -47,11 +47,17 @@ d) (if (force b) (force c)
     (let ((e1 (delay (- (force c1) 1)))) (list '_::_ (force d1)
 (go e1 (delay (+ 1 (force d1))))))))
 
-(define (fst f1) (record-case (force f1) ((triple) (g1 h1 i1) g1)))
+(define 
+  (fst f1)
+  (let ((g1 (list-ref (force f1) 0)) (h1 (list-ref (force f1) 1)) (i1 (list-ref (force f1) 2))) g1))
 
-(define (snd j1) (record-case (force j1) ((triple) (k1 l1 m1) l1)))
+(define 
+  (snd j1)
+  (let ((k1 (list-ref (force j1) 0)) (l1 (list-ref (force j1) 1)) (m1 (list-ref (force j1) 2))) l1))
 
-(define (trd n1) (record-case (force n1) ((triple) (o1 p1 q1) q1)))
+(define 
+  (trd n1)
+  (let ((o1 (list-ref (force n1) 0)) (p1 (list-ref (force n1) 1)) (q1 (list-ref (force n1) 2))) q1))
 
 (define 
   (alltriples r1)
@@ -70,16 +76,15 @@ d) (if (force b) (force c)
                 (delay 
                   (lambda 
                     (u1)
-                    (list 
-                      '_::_
-                      (list 'triple (force u1)
-(force t1)
+                    (list '_::_ (list (force u1) (force t1)
 (force s1))
-                      (list '\x5B;\x5D;))))))))))))
+(list '\x5B;\x5D;))))))))))))
 
 (define 
   (pythagorean v1)
-  (record-case (force v1) ((triple) (w1 x1 y1) (= (+ (* w1 w1) (* x1 x1)) (* y1 y1)))))
+  (let 
+    ((w1 (list-ref (force v1) 0)) (x1 (list-ref (force v1) 1)) (y1 (list-ref (force v1) 2)))
+    (= (+ (* w1 w1) (* x1 x1)) (* y1 y1))))
 
 (define (triples z1) (filter (delay (lambda (a2) (pythagorean a2))) (delay (alltriples z1))))
 
@@ -88,8 +93,10 @@ d) (if (force b) (force c)
   (record-case 
     (force b2)
     ((\x5B;\x5D;) () 0)
-    ((_::_) (c2 d2) (record-case c2 ((triple) (e2 f2 g2) (+ (+ (+ (sumall (delay d2)) e2) f2) g2))))))
+    ((_::_) 
+      (c2 d2)
+      (let 
+        ((e2 (list-ref c2 0)) (f2 (list-ref c2 1)) (g2 (list-ref c2 2)))
+        (+ (+ (+ (sumall (delay d2)) e2) f2) g2)))))
 
-    (define (test1) (sumall (delay (triples (delay 200)))))
-
-    (display (test1)) (display "\n")
+(define (test1) (sumall (delay (triples (delay 200)))))
