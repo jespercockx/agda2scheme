@@ -1,0 +1,17 @@
+on: [push]
+name: build
+jobs:
+  runhaskell:
+    name: agda2scheme
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.0'
+
+      - name: Build
+        run: cabal build all
+
+      - name: Run tests
+        run: cabal test all
