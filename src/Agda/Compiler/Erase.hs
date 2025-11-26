@@ -18,6 +18,7 @@ import Agda.Syntax.Internal as I
 import Agda.Syntax.Position
 import Agda.Syntax.Treeless
 import Agda.Syntax.Literal
+import Agda.Syntax.Builtin
 
 import Agda.TypeChecking.Substitute
 import Agda.TypeChecking.Monad as I
@@ -35,7 +36,7 @@ import Agda.Utils.Lens
 import Agda.Utils.Maybe
 import Agda.Utils.Memo
 import Agda.Utils.Monad
-import Agda.Utils.Pretty (prettyShow)
+import Agda.Syntax.Common.Pretty (prettyShow)
 import Agda.Utils.IntSet.Infinite (IntSet)
 import qualified Agda.Utils.IntSet.Infinite as IntSet
 
@@ -49,10 +50,10 @@ data ESt = ESt
       -- ^ Memoize computed `TypeInfo` for data/record types `QName`.
   }
 
-funMap :: Lens' (Map QName FunInfo) ESt
+funMap :: Lens' ESt (Map QName FunInfo)
 funMap f r = f (_funMap r) <&> \ a -> r { _funMap = a }
 
-typeMap :: Lens' (Map QName TypeInfo) ESt
+typeMap :: Lens' ESt (Map QName TypeInfo)
 typeMap f r = f (_typeMap r) <&> \ a -> r { _typeMap = a }
 
 -- | Eraser monad.
@@ -113,7 +114,7 @@ typeWithoutParams :: QName -> TCM (ListTel, Type)
 typeWithoutParams q = do
   def <- getConstInfo q
   let d = case I.theDef def of
-        Function{ funProjection = Just Projection{ projIndex = i } } -> i - 1
+        Function{ funProjection = Right Projection{ projIndex = i } } -> i - 1
         Constructor{ conPars = n } -> n
         _                          -> 0
   first (drop d) <$> telListView (defType def)
@@ -142,7 +143,6 @@ getTypeInfo t0 = do
   typeInfo :: QName -> E TypeInfo
   typeInfo q = ifM (erasureForbidden q) (return NotErasable) $ {-else-} do
     memoRec (typeMap . key q) Erasable $ do  -- assume recursive occurrences are erasable
-      mId    <- lift $ getName' builtinId
       msizes <- lift $ mapM getBuiltinName
                          [builtinSize, builtinSizeLt]
       def    <- lift $ getConstInfo q
@@ -151,7 +151,6 @@ getTypeInfo t0 = do
                   I.Record{ recConHead = c }  -> Just [conName c]
                   _                           -> Nothing
       case mcs of
-        _ | Just q == mId        -> return NotErasable
         _ | Just q `elem` msizes -> return Erasable
         Just [c] -> do
           (ts, _) <- lift $ typeWithoutParams c

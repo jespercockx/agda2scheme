@@ -21,17 +21,16 @@ import Agda.TypeChecking.Primitive.Base
 
 import Agda.Utils.Impossible
 import Agda.Utils.Lens
-import Agda.Utils.List
+import Agda.Utils.List hiding ((!!))
 import Agda.Utils.Maybe
 import Agda.Utils.Monad
 import Agda.Utils.Null
-import qualified Agda.Utils.Pretty as P
+import qualified Agda.Syntax.Common.Pretty as P
 import Agda.Utils.Singleton
 
 import Control.Arrow ( first , second )
 import Control.DeepSeq ( NFData )
 
-import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -382,10 +381,9 @@ makeSchemeName n = go $ fixName $ P.prettyShow $ qnameName n
 
     go s     = ifM (isNameUsed $ T.pack s) (go $ nextName s) (return $ T.pack s)
 
-    fixName s =
-      let s' = concat (map fixChar s) in
-      if | isNumber (head s') -> "z" ++ s'
-         | otherwise          -> s'
+    fixName s = case concatMap fixChar s of
+      s'@(d:_) | isNumber d -> "z" ++ s'
+      s' -> s'
 
     fixChar c
       | isValidSchemeChar c = [c]
@@ -395,7 +393,9 @@ makeSchemeName n = go $ fixName $ P.prettyShow $ qnameName n
     toHex i = toHex (i `div` 16) ++ [fourBitsToChar (i `mod` 16)]
 
 fourBitsToChar :: Int -> Char
-fourBitsToChar i = "0123456789ABCDEF" !! i
+fourBitsToChar i
+  | i < 10 = chr (ord '0' + i)
+  | otherwise = chr (ord 'A' + i - 10)
 {-# INLINE fourBitsToChar #-}
 
 class ToScheme a b | a -> b where
@@ -619,7 +619,7 @@ isSpecialDefinition f = do
 data SpecialCase = BoolCase
 
 isSpecialCase :: CaseInfo -> ToSchemeM (Maybe SpecialCase)
-isSpecialCase (CaseInfo lazy (CTData q cty)) = do
+isSpecialCase (CaseInfo lazy _erased (CTData cty)) = do
   mBool <- getBuiltin' builtinBool
   if mBool == Just (Def cty [])
     then return (Just BoolCase)
