@@ -11,6 +11,7 @@ import Agda.Compiler.ToScheme
 
 import Agda.Interaction.Options ( OptDescr(..) , ArgDescr(..) )
 
+import Agda.Syntax.TopLevelModuleName
 import Agda.Syntax.Treeless ( EvaluationStrategy(..) )
 
 import Agda.TypeChecking.Pretty
@@ -18,7 +19,7 @@ import Agda.TypeChecking.Pretty
 import Agda.Utils.Either
 import Agda.Utils.Functor
 import Agda.Utils.Null
-import Agda.Utils.Pretty ( prettyShow )
+import Agda.Syntax.Common.Pretty ( prettyShow )
 
 import Control.DeepSeq ( NFData )
 
@@ -27,6 +28,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 
 import Data.Function
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -58,6 +60,8 @@ backend' = Backend'
   , backendVersion        = Nothing
   , scopeCheckingSuffices = False
   , mayEraseType          = \ _ -> return True
+  , backendInteractTop    = Nothing
+  , backendInteractHole   = Nothing
   }
 
 schFlags :: [OptDescr (Flag SchOptions)]
@@ -71,10 +75,10 @@ schFlags =
 schPreCompile :: SchOptions -> TCM SchOptions
 schPreCompile opts = return opts
 
-schPostModule :: SchOptions -> () -> IsMain -> ModuleName -> [(IsMain, Definition)] -> TCM ()
+schPostModule :: SchOptions -> () -> IsMain -> TopLevelModuleName -> [(IsMain, Definition)] -> TCM ()
 schPostModule opts _ isMain modName defs = do
   let defToText = encodeOne printer . fromRich
-      fileName  = prettyShow (last $ mnameToList modName) ++ ".ss"
+      fileName  = prettyShow (NE.last $ moduleNameParts modName) ++ ".ss"
 
   modText <- runToSchemeM opts $ do
     ps  <- schPreamble

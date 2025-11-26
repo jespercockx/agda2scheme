@@ -26,8 +26,8 @@ executable agda2scheme
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.15.0.0
-                      , Agda >= 2.6.2.1 && < 2.6.3
+    build-depends:    base >=4.15.0.0
+                      , Agda >= 2.8
                       , containers >= 0.5.7.1
                       , deepseq >= 1.4.5
                       , mtl >= 2.2.2
